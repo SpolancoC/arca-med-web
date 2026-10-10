@@ -30,43 +30,54 @@ import { Route as NewPatientRoute } from "@/routes/patients.new";
 import { Route as ProfileRoute } from "@/routes/profile";
 import { Route as SettingsRoute } from "@/routes/settings";
 
+import { getProfile } from "@/services/profile";
+
 function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/login") return LoginRoute.component;
   if (pathname === "/forgot-password") return ForgotPasswordRoute.component;
+
   if (pathname === "/") return DashboardRoute.component;
   if (pathname === "/patients") return PatientsRoute.component;
   if (pathname === "/patients/new") return NewPatientRoute.component;
 
   if (/^\/dashboard\/active\/?$/.test(pathname))
     return ActivePatientsRoute.component;
+
   if (/^\/dashboard\/attention\/?$/.test(pathname))
     return AttentionRoute.component;
+
   if (/^\/dashboard\/exercise-reviews\/?$/.test(pathname))
     return ExerciseReviewsRoute.component;
+
   if (/^\/dashboard\/today\/?$/.test(pathname)) return TodayRoute.component;
 
-  if (/^\/patients\/[^/]+\/evaluation\/camera\/?$/.test(pathname)) {
+  if (/^\/patients\/[^/]+\/evaluation\/camera\/?$/.test(pathname))
     return CameraRoute.component;
-  }
-  if (/^\/patients\/[^/]+\/evaluation\/?$/.test(pathname)) {
+
+  if (/^\/patients\/[^/]+\/evaluation\/?$/.test(pathname))
     return EvaluationRoute.component;
-  }
+
   if (/^\/patients\/[^/]+\/history\/?$/.test(pathname))
     return PatientHistoryRoute.component;
+
   if (/^\/patients\/[^/]+\/recommend\/?$/.test(pathname))
     return PatientRecommendRoute.component;
+
   if (/^\/patients\/[^/]+\/?$/.test(pathname))
     return PatientDetailRoute.component;
 
   if (pathname === "/evaluations") return EvaluationsRoute.component;
   if (pathname === "/evaluations/new") return NewEvaluationRoute.component;
+
   if (/^\/evaluations\/[^/]+\/?$/.test(pathname))
     return EvaluationDetailRoute.component;
 
   if (pathname === "/exercises") return ExercisesRoute.component;
   if (pathname === "/exercises/new") return NewExerciseRoute.component;
+
   if (/^\/exercises\/[^/]+\/edit\/?$/.test(pathname))
     return ExerciseEditRoute.component;
+
   if (/^\/exercises\/[^/]+\/?$/.test(pathname))
     return ExerciseDetailRoute.component;
 
@@ -84,62 +95,169 @@ export default function App() {
 
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  const isPublicRoute =
+    pathname === "/login" || pathname === "/forgot-password";
 
   useEffect(() => {
-    const session = Boolean(localStorage.getItem("arca-med-token"));
+    let active = true;
 
-    if (!session && pathname !== "/login" && pathname !== "/forgot-password") {
-      navigate({
-        to: "/login",
-        replace: true,
-      });
-      return;
+    async function checkSession() {
+      setAuthChecked(false);
+      setAccessError(null);
+
+      const token = localStorage.getItem("arca-med-token");
+
+      if (!token) {
+        if (!active) return;
+
+        setAuthenticated(false);
+        setAuthChecked(true);
+
+        if (pathname !== "/login" && pathname !== "/forgot-password") {
+          navigate({
+            to: "/login",
+            replace: true,
+          });
+        }
+
+        return;
+      }
+
+      try {
+        const profile = await getProfile();
+
+        if (!active) return;
+
+        if (profile.rol !== "medico") {
+          setAuthenticated(false);
+
+          setAccessError(
+            "Esta cuenta no tiene acceso al portal médico de ARCA Med.",
+          );
+
+          setAuthChecked(true);
+
+          if (pathname !== "/login" && pathname !== "/forgot-password") {
+            navigate({
+              to: "/login",
+              replace: true,
+            });
+          }
+
+          return;
+        }
+
+        localStorage.setItem("arca-med-role", profile.rol);
+
+        setAuthenticated(true);
+        setAuthChecked(true);
+
+        if (pathname === "/login") {
+          navigate({
+            to: "/",
+            replace: true,
+          });
+        }
+      } catch (error) {
+        if (!active) return;
+
+        const status = (error as { status?: number })?.status;
+
+        setAuthenticated(false);
+
+        if (status === 401 || status === 403) {
+          localStorage.removeItem("arca-med-token");
+          localStorage.removeItem("arca-med-role");
+
+          setAccessError("Tu sesión ha expirado o ya no es válida.");
+
+          if (pathname !== "/login" && pathname !== "/forgot-password") {
+            navigate({
+              to: "/login",
+              replace: true,
+            });
+          }
+        } else {
+          setAccessError(
+            "No se pudo verificar la sesión. Comprueba la conexión con el servidor.",
+          );
+        }
+
+        setAuthChecked(true);
+      }
     }
 
-    if (session && pathname === "/login") {
-      navigate({
-        to: "/",
-        replace: true,
-      });
-      return;
-    }
+    void checkSession();
 
-    setAuthenticated(session);
-    setAuthChecked(true);
+    return () => {
+      active = false;
+    };
   }, [pathname]);
 
-  // Mientras comprobamos la sesión no mostramos el Dashboard
   if (!authChecked) {
-    return null;
-  }
-
-  // Usuario no autenticado
-  if (
-    !authenticated &&
-    pathname !== "/login" &&
-    pathname !== "/forgot-password"
-  ) {
     return null;
   }
 
   const Page = routeComponent(pathname);
 
-  // Login sin AppShell
-  if (pathname === "/login" || pathname === "/forgot-password") {
+  if (isPublicRoute) {
     return (
       <>
+        {accessError && (
+          <div
+            role="alert"
+            className="border-b border-border bg-surface-raised px-4 py-3 text-center text-sm text-destructive"
+          >
+            {accessError}
+          </div>
+        )}
+
         <Page />
         <Toaster />
       </>
     );
   }
 
-  // Aplicación autenticada
+  if (!authenticated) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6">
+        <div className="max-w-md space-y-4 text-center">
+          <h1 className="text-xl font-semibold">Acceso restringido</h1>
+
+          <p className="text-sm text-destructive">
+            {accessError ?? "No tienes una sesión médica activa."}
+          </p>
+
+          <button
+            type="button"
+            className="text-sm font-semibold text-primary underline"
+            onClick={() => {
+              localStorage.removeItem("arca-med-token");
+              localStorage.removeItem("arca-med-role");
+
+              setAuthenticated(false);
+
+              navigate({
+                to: "/login",
+                replace: true,
+              });
+            }}
+          >
+            Volver al inicio de sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <AppShell>
         <Page />
       </AppShell>
+
       <Toaster />
     </>
   );

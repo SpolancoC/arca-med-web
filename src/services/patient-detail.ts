@@ -1,6 +1,8 @@
 import { apiRequest } from "@/services/api";
 
 export interface PatientMetric {
+  // El backend puede omitir lado en /resumen; la interfaz lo trata como opcional.
+  lado?: string | null;
   articulacion: string;
   angulo_maximo: number;
   angulo_minimo: number;

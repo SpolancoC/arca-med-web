@@ -1,32 +1,52 @@
 import { Link, createFileRoute } from "@/lib/router";
+import { CalendarDays, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/arca/clinical";
-import { BackButton, DataTable, PageHeader, StatusPill } from "@/components/arca/ui-kit";
-import { patients, todayEvaluations } from "@/lib/arca-data";
 
 export const Route = createFileRoute("/dashboard/today")({
-  head: () => ({ meta: [
-    { title: "Evaluaciones de hoy — ARCA Med" },
-    { name: "description", content: "Evaluaciones clínicas realizadas durante el día." },
-    { property: "og:title", content: "Evaluaciones de hoy — ARCA Med" },
-    { property: "og:description", content: "Registro diario de evaluaciones de movimiento." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
-  ] }),
-  component: TodayEvaluations,
+  head: () => ({ meta: [{ title: "Estado de agenda — ARCA Med" }] }),
+  component: AgendaStatus,
 });
 
-function TodayEvaluations() {
-  return <div className="space-y-5">
-    <PageHeader back={<BackButton to="/">Volver al panel</BackButton>} eyebrow="Lunes, 21 de septiembre" title="Evaluaciones de hoy" description="Evaluaciones realizadas durante el día. Selecciona una para revisar sus resultados." />
-    <Section title={`${todayEvaluations.length} evaluaciones registradas`}>
-      <DataTable minWidth={900} head={["Paciente", "Tipo de evaluación", "Articulación", "Fecha / hora", "Resultado", "Estado", "Profesional", ""]}>
-        {todayEvaluations.map((e) => <tr key={e.id}>
-          <td className="font-semibold">{patients.find((p) => p.id === e.patientId)?.name}</td><td>{e.type}</td><td>{e.joint}</td>
-          <td>{e.date} · {e.time}</td><td>{e.value}° {e.movement.toLowerCase()}</td><td><StatusPill>{e.status}</StatusPill></td>
-          <td className="text-muted-foreground">{e.professional}</td>
-          <td className="text-right"><Button asChild variant="secondary" size="sm"><Link to="/evaluations/$evaluationId" params={{ evaluationId: e.id }}>Ver resultados</Link></Button></td>
-        </tr>)}
-      </DataTable>
-    </Section>
-  </div>;
+function AgendaStatus() {
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-xs font-semibold uppercase text-accent">
+          Agenda médica
+        </p>
+        <h1 className="mt-1 font-display text-3xl font-semibold">
+          Agenda de pacientes
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          La visualización de citas se habilitará cuando exista el servicio de
+          agenda en el backend.
+        </p>
+      </div>
+      <Section
+        title="Integración pendiente"
+        description="Sin datos de citas disponibles"
+      >
+        <div className="mt-4 flex items-start gap-3 rounded-md border border-dashed border-border p-4">
+          <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              El backend todavía no dispone de un endpoint para obtener citas de
+              un médico por fecha. No podemos afirmar que un día esté libre ni
+              mostrar consultas agendadas.
+            </p>
+            <p>
+              Requerimiento para André: endpoint de agenda con ID de cita,
+              paciente, fecha, hora, tipo, estado y médico asignado.
+            </p>
+          </div>
+        </div>
+        <Button asChild variant="secondary" size="sm">
+          <Link to="/">
+            <CalendarDays className="size-4" /> Volver al panel
+          </Link>
+        </Button>
+      </Section>
+    </div>
+  );
 }
