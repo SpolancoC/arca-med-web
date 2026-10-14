@@ -130,7 +130,7 @@ export default function App() {
 
         if (!active) return;
 
-        if (profile.rol !== "medico") {
+        if (profile.rol !== "medico" && profile.rol !== "admin") {
           setAuthenticated(false);
 
           setAccessError(
