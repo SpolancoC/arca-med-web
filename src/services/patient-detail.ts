@@ -39,3 +39,20 @@ export function getPatientSymptoms(id: number) {
 export function getPatientDocuments(id: number) {
   return apiRequest<PatientDocument[]>(`/pacientes/${id}/documentos`);
 }
+
+export interface ReviewPatientSummaryResponse {
+  id: number;
+  revisado_por_medico: boolean;
+}
+
+export function reviewPatientSummary(id: number) {
+  return apiRequest<ReviewPatientSummaryResponse>(
+    `/pacientes/${id}/resumen/revisar`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        revisado_por_medico: true,
+      }),
+    },
+  );
+}

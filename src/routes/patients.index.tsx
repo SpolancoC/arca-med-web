@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
-import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Section, TriageBadge } from "@/components/arca/clinical";
-import { getTriagePatients } from "@/services/triage";
+import { Search, Users } from "lucide-react";
 
-type TriagePatient = Awaited<ReturnType<typeof getTriagePatients>>[number];
-type Priority = "High" | "Medium" | "Low";
+import { Button } from "@/components/ui/button";
+import { Section } from "@/components/arca/clinical";
+
+import {
+  getRegisteredPatients,
+  type RegisteredPatient,
+} from "@/services/patients";
 
 export const Route = createFileRoute("/patients/")({
   head: () => ({
@@ -14,28 +16,12 @@ export const Route = createFileRoute("/patients/")({
       { title: "Pacientes — ARCA Med" },
       {
         name: "description",
-        content: "Pacientes pendientes de revisión clínica.",
+        content: "Directorio de pacientes registrados.",
       },
     ],
   }),
   component: PatientsPage,
 });
-
-function mapPriority(value: string): Priority | null {
-  switch (value.trim().toLowerCase()) {
-    case "alta":
-    case "high":
-      return "High";
-    case "media":
-    case "medium":
-      return "Medium";
-    case "baja":
-    case "low":
-      return "Low";
-    default:
-      return null;
-  }
-}
 
 function getInitials(name: string) {
   return name
@@ -48,26 +34,43 @@ function getInitials(name: string) {
 }
 
 function PatientsPage() {
-  const [patients, setPatients] = useState<TriagePatient[]>([]);
+  const [patients, setPatients] = useState<RegisteredPatient[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const role = localStorage.getItem("arca-med-role");
+  const isAdmin = role === "admin";
+
   useEffect(() => {
     let active = true;
 
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
+
     async function loadPatients() {
+      setLoading(true);
+      setError(null);
+
       try {
-        const data = await getTriagePatients();
+        const data = await getRegisteredPatients();
 
         if (active) {
           setPatients(data);
         }
       } catch (err) {
-        console.error("Error al cargar pacientes:", err);
-
         if (active) {
-          setError("No se pudieron cargar los pacientes.");
+          const status = (err as { status?: number })?.status;
+
+          setError(
+            status === 403
+              ? "Tu cuenta no tiene permiso para consultar este directorio."
+              : err instanceof Error
+                ? err.message
+                : "No se pudieron cargar los pacientes.",
+          );
         }
       } finally {
         if (active) {
@@ -81,11 +84,17 @@ function PatientsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isAdmin]);
 
-  const filteredPatients = patients.filter((patient) =>
-    patient.nombre.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+  const filteredPatients = patients.filter((patient) => {
+    const term = search.trim().toLowerCase();
+
+    return (
+      patient.nombre.toLowerCase().includes(term) ||
+      patient.email.toLowerCase().includes(term) ||
+      String(patient.id).includes(term)
+    );
+  });
 
   return (
     <div className="space-y-5">
@@ -97,132 +106,131 @@ function PatientsPage() {
         <h1 className="mt-1 font-display text-3xl font-semibold">Pacientes</h1>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          Pacientes con prediagnósticos pendientes de revisión médica.
+          Directorio general de pacientes registrados en ARCA Med.
         </p>
       </div>
 
-      <Section
-        title="Pacientes pendientes de revisión"
-        action={
-          <label className="flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2">
-            <Search className="size-4 text-muted-foreground" />
+      {!isAdmin ? (
+        <Section title="Directorio de pacientes">
+          <div className="mt-4 rounded-md border border-info-border bg-info-soft p-4 text-sm text-info">
+            El directorio general todavía no está disponible para el rol médico.
+            <p className="mt-2">
+              Se necesita un endpoint de consulta autorizado para médicos. La
+              lista de triaje continúa disponible en su sección correspondiente.
+            </p>
+          </div>
+        </Section>
+      ) : (
+        <Section
+          title="Pacientes registrados"
+          action={
+            <label className="flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2">
+              <Search className="size-4 text-muted-foreground" />
 
-            <input
-              aria-label="Buscar pacientes"
-              placeholder="Buscar pacientes"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-36 bg-transparent text-sm outline-none"
-            />
-          </label>
-        }
-      >
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[840px] text-left text-sm">
-            <thead className="border-b border-border text-[11px] uppercase text-muted-foreground">
-              <tr>
-                <th className="pb-3 font-semibold">Paciente</th>
-                <th className="pb-3 font-semibold">Última evaluación</th>
-                <th className="pb-3 font-semibold">Prioridad</th>
-                <th className="pb-3 font-semibold">Patología</th>
-                <th className="pb-3 font-semibold">Estado</th>
-                <th />
-              </tr>
-            </thead>
+              <input
+                aria-label="Buscar pacientes"
+                placeholder="Buscar pacientes"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-40 bg-transparent text-sm outline-none"
+              />
+            </label>
+          }
+        >
+          <div className="mt-4">
+            {!loading && !error && (
+              <p className="mb-4 text-sm text-muted-foreground">
+                Mostrando {filteredPatients.length} de {patients.length}{" "}
+                pacientes
+              </p>
+            )}
 
-            <tbody className="divide-y divide-border">
-              {loading && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="py-6 text-center text-muted-foreground"
-                  >
-                    Cargando pacientes...
-                  </td>
-                </tr>
-              )}
+            {loading && (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Cargando pacientes...
+              </p>
+            )}
 
-              {!loading && error && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-destructive">
-                    {error}
-                  </td>
-                </tr>
-              )}
+            {error && (
+              <p
+                role="alert"
+                className="py-8 text-center text-sm text-destructive"
+              >
+                {error}
+              </p>
+            )}
 
-              {!loading && !error && filteredPatients.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="py-8 text-center text-muted-foreground"
-                  >
-                    {search.trim()
-                      ? "No se encontraron pacientes con ese nombre."
-                      : "No hay pacientes pendientes de revisión clínica."}
-                  </td>
-                </tr>
-              )}
-
-              {!loading &&
-                !error &&
-                filteredPatients.map((patient) => {
-                  const priority = mapPriority(patient.urgencia_sugerida);
-
-                  return (
-                    <tr key={patient.usuario_id}>
-                      <td className="py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="grid size-8 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                            {getInitials(patient.nombre)}
-                          </span>
-
-                          <div>
-                            <p className="font-semibold">{patient.nombre}</p>
-
-                            <p className="text-xs text-muted-foreground">
-                              ID: {patient.usuario_id}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="text-muted-foreground">Sin información</td>
-
-                      <td>
-                        {priority ? (
-                          <TriageBadge priority={priority} />
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Sin clasificar
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="text-muted-foreground">Sin información</td>
-
-                      <td className="text-muted-foreground">
-                        Pendiente de revisión
-                      </td>
-
-                      <td className="text-right">
-                        <Button asChild variant="secondary" size="sm">
-                          <Link
-                            to="/patients/$patientId"
-                            params={{
-                              patientId: String(patient.usuario_id),
-                            }}
-                          >
-                            Ver ficha
-                          </Link>
-                        </Button>
-                      </td>
+            {!loading && !error && (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[650px] text-left text-sm">
+                  <thead className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                    <tr>
+                      <th className="pb-3 font-semibold">Paciente</th>
+                      <th className="pb-3 font-semibold">Identificador</th>
+                      <th className="pb-3 font-semibold">Correo electrónico</th>
+                      <th className="pb-3 font-semibold">Estado</th>
                     </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </Section>
+                  </thead>
+
+                  <tbody className="divide-y divide-border">
+                    {filteredPatients.map((patient) => (
+                      <tr key={patient.id}>
+                        <td className="py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                              {getInitials(patient.nombre)}
+                            </span>
+
+                            <span className="font-semibold">
+                              {patient.nombre}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-4">#{patient.id}</td>
+
+                        <td className="py-4 text-muted-foreground">
+                          {patient.email}
+                        </td>
+
+                        <td className="py-4">
+                          <span
+                            className={
+                              patient.activo
+                                ? "text-green-600"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            {patient.activo ? "Activo" : "Inactivo"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {filteredPatients.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="py-10 text-center text-muted-foreground"
+                        >
+                          <Users className="mx-auto mb-2 size-6" />
+                          No se encontraron pacientes.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-border pt-4">
+              <Button asChild variant="secondary">
+                <Link to="/triage">Ir a Triaje</Link>
+              </Button>
+            </div>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }
