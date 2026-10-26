@@ -1,3 +1,4 @@
+import { normalizeSearch } from "@/lib/search-normalization";
 import { Link, createFileRoute } from "@/lib/router";
 import { Filter, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -61,14 +62,13 @@ function ExerciseLibrary() {
   }, [exercises]);
 
   const shown = useMemo(() => {
-    const search = query.trim().toLowerCase();
+    const search = normalizeSearch(query);
 
     return exercises.filter((exercise) => {
       const matchesRegion = !region || exercise.articulacion === region;
 
       const matchesSearch =
-        `${exercise.nombre_ejercicio} ${exercise.descripcion ?? ""} ${exercise.articulacion}`
-          .toLowerCase()
+        normalizeSearch(`${exercise.nombre_ejercicio} ${exercise.descripcion ?? ""} ${exercise.articulacion}`)
           .includes(search);
 
       return matchesRegion && matchesSearch;

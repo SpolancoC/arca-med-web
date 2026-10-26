@@ -1,3 +1,4 @@
+import { normalizeSearch } from "@/lib/search-normalization";
 import { Link, createFileRoute } from "@/lib/router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/dashboard/active")({
 function ActivePatients() {
   const patients = useMockPatients();
   const [query, setQuery] = useState("");
-  const shown = patients.filter((p) => `${p.name} ${p.id} ${p.condition}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = patients.filter((p) => normalizeSearch(`${p.name} ${p.id} ${p.condition}`).includes(normalizeSearch(query)));
   return <div className="space-y-5">
     <PageHeader back={<BackButton to="/">Volver al panel</BackButton>} eyebrow="Panel principal" title="Pacientes activos" description="Pacientes en seguimiento clínico activo. Selecciona uno para abrir su ficha." />
     <Section title={`${shown.length} pacientes`} action={<SearchBox value={query} onChange={setQuery} placeholder="Buscar pacientes" />}>

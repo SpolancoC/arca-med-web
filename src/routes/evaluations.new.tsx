@@ -1,3 +1,4 @@
+import { normalizeSearch } from "@/lib/search-normalization";
 import { createFileRoute, useNavigate } from "@/lib/router";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -20,7 +21,7 @@ function SelectPatient() {
   const patients = useMockPatients();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const shown = patients.filter((p) => `${p.name} ${p.id} ${p.region}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = patients.filter((p) => normalizeSearch(`${p.name} ${p.id} ${p.region}`).includes(normalizeSearch(query)));
   return <div className="space-y-5">
     <PageHeader back={<BackButton to="/evaluations">Volver a evaluaciones</BackButton>} eyebrow="Nueva evaluación · Paso 1 de 3" title="Seleccionar paciente" description="Elige el paciente. Luego continuarás con la preparación y la cámara." />
     <Section title="Pacientes" action={<SearchBox value={query} onChange={setQuery} placeholder="Buscar por nombre, ID o región" className="w-full sm:w-72" />}>

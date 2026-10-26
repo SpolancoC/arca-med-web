@@ -1,5 +1,6 @@
 import { createFileRoute } from "@/lib/router";
-import { Info } from "lucide-react";
+import { ArrowRight, Info } from "lucide-react";
+import { Link } from "@/lib/router";
 import { useEffect, useState } from "react";
 import { Section, TriageBadge } from "@/components/arca/clinical";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
@@ -147,6 +148,14 @@ function Page() {
                   <p className="mt-1 text-muted-foreground">
                     {getPriorityLabel(priority)}
                   </p>
+                  <Link
+                    to="/patients/$patientId"
+                    params={{ patientId: String(patient.usuario_id) }}
+                    className="mt-4 inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2 text-sm font-semibold text-primary hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    Abrir ficha clínica
+                    <ArrowRight className="size-4" />
+                  </Link>
                 </div>
               </Section>
             );

@@ -29,8 +29,27 @@ import { Route as PatientRecommendRoute } from "@/routes/patients.$patientId.rec
 import { Route as NewPatientRoute } from "@/routes/patients.new";
 import { Route as ProfileRoute } from "@/routes/profile";
 import { Route as SettingsRoute } from "@/routes/settings";
+import { Route as AuditoriaRoute } from "@/routes/auditoria";
+import { Route as AdminUsersRoute } from "@/routes/admin.users";
+import { Route as ClinicalGuidesRoute } from "@/routes/clinical-guides";
 
 import { getProfile } from "@/services/profile";
+
+type PortalRole = "admin" | "medico";
+
+function allowedPath(pathname: string, role: PortalRole): boolean {
+  if (["/help", "/profile", "/settings", "/guias-clinicas"].includes(pathname)) return true;
+  if (role === "admin") {
+    return pathname === "/patients" || pathname === "/patients/new" ||
+      pathname === "/exercises" || pathname.startsWith("/exercises/") ||
+      pathname === "/auditoria" || pathname === "/admin/usuarios";
+  }
+  return pathname === "/" || pathname === "/patients" ||
+    pathname === "/triage" || pathname === "/evaluations" ||
+    pathname.startsWith("/evaluations/") || pathname === "/history" ||
+    pathname.startsWith("/dashboard/") ||
+    /^\/patients\/[^/]+(?:\/(?:evaluation(?:\/camera)?|history|recommend))?\/?$/.test(pathname);
+}
 
 function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/login") return LoginRoute.component;
@@ -86,6 +105,9 @@ function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/help") return HelpRoute.component;
   if (pathname === "/profile") return ProfileRoute.component;
   if (pathname === "/settings") return SettingsRoute.component;
+  if (pathname === "/auditoria") return AuditoriaRoute.component;
+  if (pathname === "/admin/usuarios") return AdminUsersRoute.component;
+  if (pathname === "/guias-clinicas") return ClinicalGuidesRoute.component;
 
   return DashboardRoute.component;
 }
@@ -95,6 +117,7 @@ export default function App() {
 
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [role, setRole] = useState<PortalRole | null>(null);
   const [accessError, setAccessError] = useState<string | null>(null);
 
   const isPublicRoute =
@@ -113,6 +136,7 @@ export default function App() {
         if (!active) return;
 
         setAuthenticated(false);
+        setRole(null);
         setAuthChecked(true);
 
         if (pathname !== "/login" && pathname !== "/forgot-password") {
@@ -150,13 +174,14 @@ export default function App() {
         }
 
         localStorage.setItem("arca-med-role", profile.rol);
+        setRole(profile.rol as PortalRole);
 
         setAuthenticated(true);
         setAuthChecked(true);
 
-        if (pathname === "/login") {
+        if (pathname === "/login" || (profile.rol === "admin" && pathname === "/")) {
           navigate({
-            to: "/",
+            to: profile.rol === "admin" ? "/patients" : "/",
             replace: true,
           });
         }
@@ -166,6 +191,7 @@ export default function App() {
         const status = (error as { status?: number })?.status;
 
         setAuthenticated(false);
+        setRole(null);
 
         if (status === 401 || status === 403) {
           localStorage.removeItem("arca-med-token");
@@ -201,6 +227,7 @@ export default function App() {
   }
 
   const Page = routeComponent(pathname);
+  const permitted = role !== null && allowedPath(pathname, role);
 
   if (isPublicRoute) {
     return (
@@ -249,6 +276,26 @@ export default function App() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (authenticated && !permitted) {
+    return (
+      <>
+        <AppShell>
+          <div role="alert" className="rounded-md border border-border bg-surface-raised p-6">
+            <h1 className="text-lg font-semibold">Acceso restringido</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Esta pantalla no está disponible para tu perfil.
+            </p>
+            <button type="button" className="mt-4 text-sm font-semibold text-primary underline"
+              onClick={() => navigate({ to: role === "admin" ? "/patients" : "/", replace: true })}>
+              Volver al inicio
+            </button>
+          </div>
+        </AppShell>
+        <Toaster />
+      </>
     );
   }
 

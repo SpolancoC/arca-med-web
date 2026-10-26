@@ -1,3 +1,4 @@
+import { normalizeSearch } from "@/lib/search-normalization";
 import { createFileRoute } from "@/lib/router";
 import { BookOpen, Bug, ChevronDown, Headset, MessageSquare } from "lucide-react";
 import { useState } from "react";
@@ -31,7 +32,7 @@ const contact = [{ icon: Headset, label: "Contactar soporte", text: "Lunes a vie
 function Help() {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<number | null>(0);
-  const shown = faqs.filter((f) => `${f.cat} ${f.q} ${f.a}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = faqs.filter((f) => normalizeSearch(`${f.cat} ${f.q} ${f.a}`).includes(normalizeSearch(query)));
   return <div className="space-y-5">
     <PageHeader eyebrow="Centro de ayuda" title="Ayuda" description="Encuentra respuestas, guías y formas de contacto." />
     <SearchBox value={query} onChange={setQuery} placeholder="¿En qué podemos ayudarte?" className="max-w-xl py-3" />

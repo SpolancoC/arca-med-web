@@ -56,7 +56,7 @@ function LoginPage() {
       localStorage.setItem("arca-med-role", response.rol);
 
       await navigate({
-        to: "/",
+        to: response.rol === "admin" ? "/patients" : "/",
         replace: true,
       });
     } catch (error) {
@@ -87,7 +87,7 @@ function LoginPage() {
       localStorage.setItem("arca-med-role", response.rol);
 
       await navigate({
-        to: "/",
+        to: response.rol === "admin" ? "/patients" : "/",
         replace: true,
       });
     } catch (error) {

@@ -2,8 +2,10 @@ import { Link, useNavigate, useRouterState } from "@/lib/router";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
+  ShieldCheck,
   Bell,
   BookOpen,
+  BookMarked,
   ChevronLeft,
   CircleHelp,
   ClipboardCheck,
@@ -14,6 +16,7 @@ import {
   Search,
   Settings,
   Users,
+  UserCog,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +31,17 @@ const nav = [
   { label: "Ejercicios", to: "/exercises", icon: BookOpen },
   { label: "Historial", to: "/history", icon: History },
 ] as const;
+
+const adminNav = [
+  { label: "Pacientes", to: "/patients", icon: Users },
+  { label: "Usuarios", to: "/admin/usuarios", icon: UserCog },
+  { label: "Ejercicios", to: "/exercises", icon: BookOpen },
+  { label: "Auditoría", to: "/auditoria", icon: ShieldCheck },
+  { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
+];
+const medicoNav = [...nav.filter(item => item.to !== "/exercises"),
+  { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -51,13 +65,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
+  const currentNav = profile?.rol === "admin" ? adminNav : medicoNav;
   const title = pathname.includes("/evaluation/camera")
     ? "Cámara de evaluación"
     : pathname.endsWith("/evaluation")
       ? "Nueva evaluación"
       : pathname.startsWith("/patients/")
         ? "Ficha del paciente"
-        : (nav.find((item) => item.to === pathname)?.label ??
+        : (currentNav.find((item) => item.to === pathname)?.label ??
           "Espacio clínico");
 
   if (pathname === "/login") return children;
@@ -79,7 +94,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1">
-          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+          <Link to={profile?.rol === "admin" ? "/patients" : "/"} className="flex min-w-0 items-center gap-2.5">
             <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary font-display text-base font-semibold text-primary-foreground">
               A
             </div>
@@ -110,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               Espacio de trabajo
             </span>
           )}
-          {nav.map((item) => {
+          {currentNav.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             return (

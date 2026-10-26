@@ -1,3 +1,4 @@
+import { normalizeSearch } from "@/lib/search-normalization";
 import { Link, createFileRoute } from "@/lib/router";
 import { ArrowLeft, Clock, Repeat2, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -29,7 +30,7 @@ function Recommend() {
   const [assigned, setAssigned] = useState(false);
   if (!patient) return <BackButton to="/patients">Volver a pacientes</BackButton>;
   const categories = ["Todas", ...new Set(exercises.map((e) => e.region))];
-  const shown = exercises.filter((e) => (category === "Todas" || e.region === category) && `${e.name} ${e.description} ${e.objective}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = exercises.filter((e) => (category === "Todas" || e.region === category) && normalizeSearch(`${e.name} ${e.description} ${e.objective}`).includes(normalizeSearch(query)));
   const selected = exercises.find((e) => e.id === selectedId);
   const back = <BackButton to="/patients/$patientId" params={{ patientId }}>Volver a la ficha</BackButton>;
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
-import { CalendarDays, FileText, Info } from "lucide-react";
+import { ArrowLeft, CalendarDays, FileText, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section, TriageBadge } from "@/components/arca/clinical";
 import {
@@ -212,6 +212,15 @@ function PatientDetail() {
 
   return (
     <div className="space-y-5">
+      {isDoctor && (
+        <Link
+          to="/triage"
+          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+        >
+          <ArrowLeft className="size-4" />
+          Volver a Triaje
+        </Link>
+      )}
       <header className="rounded-lg border border-border bg-card/75 p-5 shadow-clinical">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -324,6 +333,9 @@ function PatientDetail() {
               {reviewSuccess ? (
                 <p role="status" className="text-sm font-medium text-green-600">
                   Resumen marcado como revisado correctamente.
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                    Puedes volver a Triaje para consultar el listado actualizado.
+                  </span>
                 </p>
               ) : (
                 <Button
