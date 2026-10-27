@@ -39,6 +39,7 @@ const adminNav = [
   { label: "Auditoría", to: "/auditoria", icon: ShieldCheck },
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
+const pacienteNav = [{ label: "Mi espacio", to: "/mi-espacio", icon: Activity }];
 const medicoNav = [...nav.filter(item => item.to !== "/exercises"),
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
@@ -65,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
-  const currentNav = profile?.rol === "admin" ? adminNav : medicoNav;
+  const currentNav = profile?.rol === "admin" ? adminNav : profile?.rol === "paciente" ? pacienteNav : medicoNav;
   const title = pathname.includes("/evaluation/camera")
     ? "Cámara de evaluación"
     : pathname.endsWith("/evaluation")
@@ -94,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1">
-          <Link to={profile?.rol === "admin" ? "/patients" : "/"} className="flex min-w-0 items-center gap-2.5">
+          <Link to={profile?.rol === "admin" ? "/patients" : profile?.rol === "paciente" ? "/mi-espacio" : "/"} className="flex min-w-0 items-center gap-2.5">
             <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary font-display text-base font-semibold text-primary-foreground">
               A
             </div>

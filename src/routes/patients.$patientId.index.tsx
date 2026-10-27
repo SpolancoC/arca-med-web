@@ -181,12 +181,19 @@ function PatientDetail() {
       }
     }
 
+    // GET /ejercicios solo autoriza admin y paciente, no medico.
+    // Evitar la solicitud 403 desde la ficha clínica del medico.
+    if (isDoctor) {
+      setExercisesLoading(false);
+      return;
+    }
+
     void loadExercises();
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [isDoctor]);
 
   if (loading) {
     return (

@@ -34,10 +34,12 @@ import { Route as AdminUsersRoute } from "@/routes/admin.users";
 import { Route as ClinicalGuidesRoute } from "@/routes/clinical-guides";
 
 import { getProfile } from "@/services/profile";
+import { Route as PatientPortalRoute } from "@/routes/patient-portal";
 
-type PortalRole = "admin" | "medico";
+type PortalRole = "admin" | "medico" | "paciente";
 
 function allowedPath(pathname: string, role: PortalRole): boolean {
+  if (role === "paciente") return pathname === "/mi-espacio" || pathname === "/profile";
   if (["/help", "/profile", "/settings", "/guias-clinicas"].includes(pathname)) return true;
   if (role === "admin") {
     return pathname === "/patients" || pathname === "/patients/new" ||
@@ -53,6 +55,7 @@ function allowedPath(pathname: string, role: PortalRole): boolean {
 
 function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/login") return LoginRoute.component;
+  if (pathname === "/mi-espacio") return PatientPortalRoute.component;
   if (pathname === "/forgot-password") return ForgotPasswordRoute.component;
 
   if (pathname === "/") return DashboardRoute.component;
@@ -109,8 +112,13 @@ function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/admin/usuarios") return AdminUsersRoute.component;
   if (pathname === "/guias-clinicas") return ClinicalGuidesRoute.component;
 
-  return DashboardRoute.component;
+  return NotFoundPage;
 }
+
+function NotFoundPage() {
+  return <div role="alert" className="rounded-md border border-border bg-surface-raised p-6"><h1 className="text-lg font-semibold">Página no encontrada</h1><p className="mt-2 text-sm text-muted-foreground">La dirección solicitada no existe en ARCA Med.</p><button type="button" className="mt-4 text-sm font-semibold text-primary underline" onClick={() => navigate({to: "/", replace: true})}>Volver al inicio</button></div>;
+}
+
 
 export default function App() {
   const pathname = usePathname();
@@ -154,7 +162,7 @@ export default function App() {
 
         if (!active) return;
 
-        if (profile.rol !== "medico" && profile.rol !== "admin") {
+        if (profile.rol !== "medico" && profile.rol !== "admin" && profile.rol !== "paciente") {
           setAuthenticated(false);
 
           setAccessError(
@@ -179,9 +187,9 @@ export default function App() {
         setAuthenticated(true);
         setAuthChecked(true);
 
-        if (pathname === "/login" || (profile.rol === "admin" && pathname === "/")) {
+        if (pathname === "/login" || (profile.rol !== "medico" && pathname === "/")) {
           navigate({
-            to: profile.rol === "admin" ? "/patients" : "/",
+            to: profile.rol === "admin" ? "/patients" : profile.rol === "paciente" ? "/mi-espacio" : "/",
             replace: true,
           });
         }
@@ -289,7 +297,7 @@ export default function App() {
               Esta pantalla no está disponible para tu perfil.
             </p>
             <button type="button" className="mt-4 text-sm font-semibold text-primary underline"
-              onClick={() => navigate({ to: role === "admin" ? "/patients" : "/", replace: true })}>
+              onClick={() => navigate({ to: role === "admin" ? "/patients" : role === "paciente" ? "/mi-espacio" : "/", replace: true })}>
               Volver al inicio
             </button>
           </div>

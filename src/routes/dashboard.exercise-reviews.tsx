@@ -1,33 +1,57 @@
 import { Link, createFileRoute } from "@/lib/router";
-import { ChevronRight } from "lucide-react";
+import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/arca/clinical";
-import { BackButton, DataTable, PageHeader, StatusPill } from "@/components/arca/ui-kit";
-import { exerciseReviews, exercises, patients } from "@/lib/arca-data";
+import { BackButton, PageHeader } from "@/components/arca/ui-kit";
 
 export const Route = createFileRoute("/dashboard/exercise-reviews")({
-  head: () => ({ meta: [
-    { title: "Revisiones de ejercicios pendientes — ARCA Med" },
-    { name: "description", content: "Ejercicios asignados a pacientes que requieren revisión profesional." },
-    { property: "og:title", content: "Revisiones de ejercicios pendientes — ARCA Med" },
-    { property: "og:description", content: "Seguimiento de ejercicios pendientes de revisión." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Revisiones de ejercicios pendientes — ARCA Med" },
+      {
+        name: "description",
+        content: "Estado de integración de las revisiones de ejercicios.",
+      },
+    ],
+  }),
   component: ExerciseReviews,
 });
 
 function ExerciseReviews() {
-  return <div className="space-y-5">
-    <PageHeader back={<BackButton to="/">Volver al panel</BackButton>} eyebrow="Panel principal" title="Revisiones de ejercicios pendientes" description="Ejercicios enviados a pacientes que requieren tu revisión." />
-    <Section title={`${exerciseReviews.length} revisiones pendientes`}>
-      <DataTable minWidth={860} head={["Paciente", "Ejercicio", "Fecha de asignación", "Estado", "Motivo de revisión", ""]}>
-        {exerciseReviews.map((r) => <tr key={r.id}>
-          <td className="font-semibold">{patients.find((p) => p.id === r.patientId)?.name}</td>
-          <td>{exercises.find((e) => e.id === r.exerciseId)?.name}</td><td>{r.assigned}</td>
-          <td><StatusPill>{r.status}</StatusPill></td><td className="text-muted-foreground">{r.reason}</td>
-          <td className="text-right"><Button asChild variant="secondary" size="sm"><Link to="/exercises/$exerciseId" params={{ exerciseId: String(r.exerciseId) }}>Revisar<ChevronRight className="size-3.5" /></Link></Button></td>
-        </tr>)}
-      </DataTable>
-    </Section>
-  </div>;
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        back={<BackButton to="/">Volver al panel</BackButton>}
+        eyebrow="Panel principal"
+        title="Revisiones de ejercicios pendientes"
+        description="Seguimiento profesional de ejercicios de pacientes."
+      />
+
+      <Section
+        title="Integración pendiente"
+        description="Sin datos de revisiones disponibles en la API"
+      >
+        <div className="mt-4 flex items-start gap-3 rounded-md border border-dashed border-border p-4">
+          <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              El backend permite a los pacientes registrar una ejecución de
+              ejercicio, pero todavía no ofrece al médico un listado de
+              ejecuciones, asignaciones o revisiones pendientes.
+            </p>
+
+            <p>
+              No se muestran ejercicios ni pacientes de ejemplo para evitar
+              confundir datos simulados con información clínica real.
+            </p>
+
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/">Volver al Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
 }

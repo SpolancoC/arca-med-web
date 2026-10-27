@@ -8,6 +8,7 @@ import { Section } from "@/components/arca/clinical";
 
 import {
   getRegisteredPatients,
+  getMedicalPatients,
   updatePatient,
   type RegisteredPatient,
 } from "@/services/patients";
@@ -43,11 +44,12 @@ function PatientsPage() {
 
   const role = localStorage.getItem("arca-med-role");
   const isAdmin = role === "admin";
+  const isDoctor = role === "medico";
 
   useEffect(() => {
     let active = true;
 
-    if (!isAdmin) {
+    if (!isAdmin && !isDoctor) {
       setLoading(false);
       return;
     }
@@ -57,7 +59,7 @@ function PatientsPage() {
       setError(null);
 
       try {
-        const data = await getRegisteredPatients();
+        const data = await (isAdmin ? getRegisteredPatients() : getMedicalPatients());
 
         if (active) {
           setPatients(data);
@@ -67,7 +69,9 @@ function PatientsPage() {
           const status = (err as { status?: number })?.status;
 
           setError(
-            status === 403
+            isDoctor && status === 404
+              ? "El directorio médico está preparado, pero todavía falta habilitar GET /pacientes en el backend."
+              : status === 403
               ? "Tu cuenta no tiene permiso para consultar este directorio."
               : err instanceof Error
                 ? err.message
@@ -86,7 +90,7 @@ function PatientsPage() {
     return () => {
       active = false;
     };
-  }, [isAdmin]);
+  }, [isAdmin, isDoctor]);
 
   const [editing, setEditing] = useState<RegisteredPatient | null>(null);
   const [editName, setEditName] = useState("");
@@ -179,7 +183,7 @@ function PatientsPage() {
         </p>
       </div>
 
-      {!isAdmin ? (
+      {!isAdmin && !isDoctor ? (
         <Section title="Directorio de pacientes">
           <div className="mt-4 rounded-md border border-info-border bg-info-soft p-4 text-sm text-info">
             El directorio general todavía no está disponible para el rol médico.
@@ -191,7 +195,7 @@ function PatientsPage() {
         </Section>
       ) : (
         <Section
-          title="Pacientes registrados"
+          title={isAdmin ? "Pacientes registrados" : "Directorio médico de pacientes"}
           action={
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               {/* Buscador de pacientes */}
@@ -209,7 +213,7 @@ function PatientsPage() {
               </label>
 
               {/* Botón para crear paciente */}
-              <Button asChild className="w-full shrink-0 sm:w-auto">
+              {isAdmin && <Button asChild className="w-full shrink-0 sm:w-auto">
                 <Link
                   to="/patients/new"
                   className="flex items-center justify-center gap-2 whitespace-nowrap"
@@ -217,7 +221,7 @@ function PatientsPage() {
                   <UserPlus className="size-4 shrink-0" />
                   <span>Nuevo paciente</span>
                 </Link>
-              </Button>
+              </Button>}
             </div>
           }
         >
@@ -230,7 +234,7 @@ function PatientsPage() {
             </p>
           )}
 
-          {editing && (
+          {isAdmin && editing && (
             <Section title={`Editar paciente #${editing.id}`}>
               <form onSubmit={savePatient} className="mt-4 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -382,15 +386,17 @@ function PatientsPage() {
                         </td>
 
                         <td className="py-4 text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => openEditor(patient)}
-                          >
-                            <Pencil className="size-4" />
-                            Editar
-                          </Button>
+                          {isAdmin ? (
+                            <Button type="button" size="sm" variant="secondary" onClick={() => openEditor(patient)}>
+                              <Pencil className="size-4" /> Editar
+                            </Button>
+                          ) : (
+                            <Button asChild size="sm" variant="secondary">
+                              <Link to="/patients/$patientId" params={{ patientId: String(patient.id) }}>
+                                Ver ficha
+                              </Link>
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -411,11 +417,11 @@ function PatientsPage() {
               </div>
             )}
 
-            <div className="mt-4 border-t border-border pt-4">
+            {isDoctor && <div className="mt-4 border-t border-border pt-4">
               <Button asChild variant="secondary">
                 <Link to="/triage">Ir a Triaje</Link>
               </Button>
-            </div>
+            </div>}
           </div>
         </Section>
       )}

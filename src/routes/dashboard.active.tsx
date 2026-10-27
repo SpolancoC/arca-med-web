@@ -1,38 +1,67 @@
-import { normalizeSearch } from "@/lib/search-normalization";
 import { Link, createFileRoute } from "@/lib/router";
-import { useState } from "react";
+import { Info, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/arca/clinical";
-import { BackButton, DataTable, Initials, PageHeader, SearchBox, StatusPill } from "@/components/arca/ui-kit";
-import { profileFor } from "@/lib/arca-data";
-import { useMockPatients } from "@/lib/mock-store";
+import { BackButton, PageHeader } from "@/components/arca/ui-kit";
 
 export const Route = createFileRoute("/dashboard/active")({
-  head: () => ({ meta: [
-    { title: "Pacientes activos — ARCA Med" },
-    { name: "description", content: "Listado de pacientes activos con estado, última evaluación y próxima revisión." },
-    { property: "og:title", content: "Pacientes activos — ARCA Med" },
-    { property: "og:description", content: "Pacientes en seguimiento activo." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Pacientes activos — ARCA Med" },
+      {
+        name: "description",
+        content: "Estado de la integración del directorio médico de pacientes.",
+      },
+    ],
+  }),
   component: ActivePatients,
 });
 
 function ActivePatients() {
-  const patients = useMockPatients();
-  const [query, setQuery] = useState("");
-  const shown = patients.filter((p) => normalizeSearch(`${p.name} ${p.id} ${p.condition}`).includes(normalizeSearch(query)));
-  return <div className="space-y-5">
-    <PageHeader back={<BackButton to="/">Volver al panel</BackButton>} eyebrow="Panel principal" title="Pacientes activos" description="Pacientes en seguimiento clínico activo. Selecciona uno para abrir su ficha." />
-    <Section title={`${shown.length} pacientes`} action={<SearchBox value={query} onChange={setQuery} placeholder="Buscar pacientes" />}>
-      <DataTable minWidth={980} head={["Paciente", "ID", "Edad", "Diagnóstico", "Articulación", "Estado", "Última evaluación", "Próxima revisión", ""]}>
-        {shown.map((p) => <tr key={p.id}>
-          <td><div className="flex items-center gap-3"><Initials>{p.initials}</Initials><span className="font-semibold">{p.name}</span></div></td>
-          <td className="text-muted-foreground">{p.id}</td><td>{p.age}</td><td>{p.condition}</td><td>{p.region}</td>
-          <td><StatusPill>{p.status}</StatusPill></td><td>{p.lastEvaluation}</td><td>{profileFor(p.id).nextReview}</td>
-          <td className="text-right"><Button asChild variant="secondary" size="sm"><Link to="/patients/$patientId" params={{ patientId: p.id }}>Ver ficha</Link></Button></td>
-        </tr>)}
-      </DataTable>
-    </Section>
-  </div>;
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        back={<BackButton to="/">Volver al panel</BackButton>}
+        eyebrow="Panel principal"
+        title="Pacientes activos"
+        description="Listado de pacientes en seguimiento médico."
+      />
+
+      <Section
+        title="Directorio médico pendiente"
+        description="Sin datos de pacientes activos disponibles en el backend actual"
+      >
+        <div className="mt-4 flex items-start gap-3 rounded-md border border-dashed border-border p-4">
+          <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              El backend todavía no expone GET /pacientes para el rol médico ni
+              un estado de seguimiento activo. Por eso, no es posible calcular
+              el total de pacientes activos ni mostrar sus fichas en este
+              listado.
+            </p>
+
+            <p>
+              Los pacientes de Triaje corresponden a prediagnósticos pendientes:
+              no equivalen al directorio de pacientes activos.
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="secondary">
+                <Link to="/patients">
+                  <Users className="size-4" />
+                  Ir a Pacientes
+                </Link>
+              </Button>
+
+              <Button asChild size="sm" variant="outline">
+                <Link to="/triage">Ver Triaje pendiente</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
 }

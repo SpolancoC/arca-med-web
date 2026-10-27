@@ -1,38 +1,27 @@
-import { normalizeSearch } from "@/lib/search-normalization";
-import { createFileRoute, useNavigate } from "@/lib/router";
-import { ChevronRight } from "lucide-react";
-import { useState } from "react";
-import { Section, TriageBadge } from "@/components/arca/clinical";
-import { BackButton, Initials, PageHeader, SearchBox } from "@/components/arca/ui-kit";
-import { useMockPatients } from "@/lib/mock-store";
+import { Link, createFileRoute } from "@/lib/router";
+import { Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Section } from "@/components/arca/clinical";
+import { PageHeader } from "@/components/arca/ui-kit";
 
 export const Route = createFileRoute("/evaluations/new")({
-  head: () => ({ meta: [
-    { title: "Seleccionar paciente — ARCA Med" },
-    { name: "description", content: "Selecciona el paciente para iniciar una nueva evaluación de movimiento." },
-    { property: "og:title", content: "Seleccionar paciente — ARCA Med" },
-    { property: "og:description", content: "Inicio de una nueva evaluación de movimiento." },
-    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
-  ] }),
-  component: SelectPatient,
+  head: () => ({ meta: [{ title: "Nueva evaluación — ARCA Med" }] }),
+  component: Page,
 });
 
-function SelectPatient() {
-  const patients = useMockPatients();
-  const navigate = useNavigate();
-  const [query, setQuery] = useState("");
-  const shown = patients.filter((p) => normalizeSearch(`${p.name} ${p.id} ${p.region}`).includes(normalizeSearch(query)));
-  return <div className="space-y-5">
-    <PageHeader back={<BackButton to="/evaluations">Volver a evaluaciones</BackButton>} eyebrow="Nueva evaluación · Paso 1 de 3" title="Seleccionar paciente" description="Elige el paciente. Luego continuarás con la preparación y la cámara." />
-    <Section title="Pacientes" action={<SearchBox value={query} onChange={setQuery} placeholder="Buscar por nombre, ID o región" className="w-full sm:w-72" />}>
-      <div className="mt-3 divide-y divide-border">
-        {shown.map((p) => <button key={p.id} onClick={() => void navigate({ to: "/patients/$patientId/evaluation", params: { patientId: p.id } })} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md px-1 py-3 text-left transition-colors hover:bg-muted">
-          <Initials>{p.initials}</Initials>
-          <div className="min-w-0"><p className="truncate text-sm font-semibold">{p.name}</p><p className="truncate text-xs text-muted-foreground">{p.age} años · {p.id} · {p.region}</p></div>
-          <TriageBadge priority={p.priority} /><ChevronRight className="size-4 text-muted-foreground" />
-        </button>)}
-        {shown.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Ningún paciente coincide con la búsqueda.</p>}
-      </div>
-    </Section>
-  </div>;
+function Page() {
+  return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="ARCA Med" title="Nueva evaluación" description="Información clínica sin registros de demostración" />
+      <Section title="Selección de paciente">
+        <div role="status" className="mt-4 flex items-start gap-3 rounded-md border border-dashed border-border p-4">
+          <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>La selección para una nueva evaluación requiere el directorio médico y un flujo persistente. No se utilizan pacientes ficticios.</p>
+            <Button asChild size="sm" variant="secondary"><Link to="/patients">Ir a Pacientes</Link></Button>
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
 }

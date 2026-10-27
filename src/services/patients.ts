@@ -69,3 +69,12 @@ export function updatePatient(
     body: JSON.stringify(data),
   });
 }
+
+/**
+ * Directorio autorizado del medico. Este endpoint NO existe todavia en
+ * el backend entregado el 27/10; mantener separado del listado admin.
+ * La respuesta esperada debe usar el mismo ID de las rutas clinicas.
+ */
+export function getMedicalPatients(): Promise<RegisteredPatient[]> {
+  return apiRequest<RegisteredPatient[]>("/pacientes");
+}
