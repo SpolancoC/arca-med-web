@@ -71,10 +71,18 @@ export function updatePatient(
 }
 
 /**
- * Directorio autorizado del medico. Este endpoint NO existe todavia en
- * el backend entregado el 27/10; mantener separado del listado admin.
- * La respuesta esperada debe usar el mismo ID de las rutas clinicas.
+ * Directorio medico: GET /pacientes devuelve id, nombre y email.
+ * El backend incluye exclusivamente pacientes activos, y por eso
+ * completamos rol/activo para reutilizar la tabla existente sin
+ * presentar estados incorrectos.
  */
-export function getMedicalPatients(): Promise<RegisteredPatient[]> {
-  return apiRequest<RegisteredPatient[]>("/pacientes");
+type MedicalPatientResponse = Pick<RegisteredPatient, "id" | "nombre" | "email">;
+
+export async function getMedicalPatients(): Promise<RegisteredPatient[]> {
+  const patients = await apiRequest<MedicalPatientResponse[]>("/pacientes");
+  return patients.map((patient) => ({
+    ...patient,
+    rol: "paciente",
+    activo: true,
+  }));
 }

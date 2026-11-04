@@ -2,10 +2,13 @@ import { Link, createFileRoute } from "@/lib/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, type UserProfile } from "@/services/profile";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
+import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
 import {
   Activity,
   AlertCircle,
   CalendarDays,
+  ArrowRight,
+  BookMarked,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -255,9 +258,13 @@ function uniquePendingPatients(items: TriagePatient[]): TriagePatient[] {
 function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [pendingTriage, setPendingTriage] = useState<TriagePatient[]>([]);
+  const [medicalPatients, setMedicalPatients] = useState<RegisteredPatient[]>([]);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [patientsError, setPatientsError] = useState<string | null>(null);
   const [loadingTriage, setLoadingTriage] = useState(true);
   const [triageError, setTriageError] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [onlyHighPriority, setOnlyHighPriority] = useState(false);
 
   const refresh = useCallback(
     () => setRefreshVersion((version) => version + 1),
@@ -307,6 +314,27 @@ function Dashboard() {
     };
   }, [refreshVersion]);
 
+  // Directorio real de pacientes activos, independiente del triaje.
+  useEffect(() => {
+    let active = true;
+    setLoadingPatients(true);
+    setPatientsError(null);
+    void getMedicalPatients().then(
+      (items) => {
+        if (!active) return;
+        setMedicalPatients(items);
+        setLoadingPatients(false);
+      },
+      (error: unknown) => {
+        if (!active) return;
+        setMedicalPatients([]);
+        setLoadingPatients(false);
+        setPatientsError(error instanceof Error ? error.message : "No se pudo consultar el directorio médico.");
+      },
+    );
+    return () => { active = false; };
+  }, [refreshVersion]);
+
   // Refrescar al regresar a la pestaña después de revisar a un paciente.
   useEffect(() => {
     const onVisible = () => {
@@ -327,6 +355,9 @@ function Dashboard() {
   const highPriority = pendingPatients.filter(
     (p) => getPriority(p.urgencia_sugerida) === "High",
   ).length;
+  const visiblePendingPatients = onlyHighPriority
+    ? pendingPatients.filter((patient) => getPriority(patient.urgencia_sugerida) === "High")
+    : pendingPatients;
   const pendingCount =
     loadingTriage && pendingTriage.length === 0
       ? "…"
@@ -345,8 +376,7 @@ function Dashboard() {
             {getGreeting()}, {profile?.nombre ?? "Usuario"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Información de triaje conectada a ARCA Med y módulos pendientes de
-            API.
+            Información del directorio médico y triaje en tiempo real; algunos módulos aún requieren integración.
           </p>
         </div>
         <Button
@@ -354,18 +384,18 @@ function Dashboard() {
           variant="secondary"
           size="sm"
           onClick={refresh}
-          disabled={loadingTriage}
+          disabled={loadingTriage || loadingPatients}
         >
           <RefreshCw className="size-4" />{" "}
-          {loadingTriage ? "Actualizando…" : "Actualizar"}
+          {loadingTriage || loadingPatients ? "Actualizando…" : "Actualizar"}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Pacientes activos"
-          value="—"
-          detail="Pendiente: GET /pacientes"
+          value={loadingPatients ? "…" : patientsError ? "—" : String(medicalPatients.length)}
+          detail={patientsError ? "No se pudo consultar el directorio" : "Cuentas de pacientes activas"}
           icon={Users}
         />
         <StatCard
@@ -394,6 +424,34 @@ function Dashboard() {
         />
       </div>
 
+      {patientsError && (
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 p-3 text-sm text-destructive">
+          <AlertCircle className="size-4 shrink-0" />
+          <span>No se pudo cargar el directorio médico: {patientsError}. El total de pacientes no está disponible.</span>
+          <Button type="button" variant="secondary" size="sm" onClick={refresh}>Reintentar</Button>
+        </div>
+      )}
+
+      <Section title="Accesos rápidos" description="Herramientas disponibles para el trabajo clínico">
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {[
+            { title: "Pacientes", description: "Consultar el directorio y abrir fichas clínicas.", href: "/patients", Icon: Users },
+            { title: "Triaje", description: "Revisar los prediagnósticos pendientes.", href: "/triage", Icon: ClipboardCheck },
+            { title: "Guías clínicas", description: "Consultar guías de apoyo a la atención.", href: "/guias-clinicas", Icon: BookMarked },
+          ].map(({ title, description, href, Icon }) => (
+            <Link key={href} to={href} className="group flex min-h-28 flex-col justify-between rounded-md border border-border bg-surface-raised/60 p-4 transition-colors hover:border-primary/40 hover:bg-primary-soft/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <Icon className="size-4 text-primary" /> {title}
+              </div>
+              <div className="mt-3 flex items-end justify-between gap-2">
+                <p className="text-xs text-muted-foreground">{description}</p>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </Section>
+
       {triageError && (
         <div
           role="alert"
@@ -421,6 +479,23 @@ function Dashboard() {
           </Button>
         }
       >
+        {!triageError && !loadingTriage && pendingPatients.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {onlyHighPriority
+                ? `${visiblePendingPatients.length} de ${pendingPatients.length} pacientes con prioridad alta sugerida`
+                : `${pendingPatients.length} pacientes pendientes · ${highPriority} con prioridad alta sugerida`}
+            </p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar pendientes por prioridad">
+              <Button type="button" variant={onlyHighPriority ? "outline" : "secondary"} size="sm" aria-pressed={!onlyHighPriority} onClick={() => setOnlyHighPriority(false)}>
+                Todos
+              </Button>
+              <Button type="button" variant={onlyHighPriority ? "secondary" : "outline"} size="sm" aria-pressed={onlyHighPriority} onClick={() => setOnlyHighPriority(true)}>
+                Prioridad alta ({highPriority})
+              </Button>
+            </div>
+          </div>
+        )}
         {loadingTriage && pendingTriage.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">
             Cargando pacientes desde el backend…
@@ -433,9 +508,13 @@ function Dashboard() {
           <p className="mt-4 text-sm text-muted-foreground">
             No hay pacientes con prediagnósticos pendientes de revisión.
           </p>
+        ) : visiblePendingPatients.length === 0 ? (
+          <p className="mt-4 rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+            No hay pacientes pendientes con prioridad alta sugerida. Puedes seleccionar «Todos» para ver el resto.
+          </p>
         ) : (
           <div className="mt-3 divide-y divide-border">
-            {pendingPatients.slice(0, 5).map((patient) => {
+            {visiblePendingPatients.slice(0, 5).map((patient) => {
               const priority = getPriority(patient.urgencia_sugerida);
               return (
                 <div
@@ -476,9 +555,9 @@ function Dashboard() {
                 </div>
               );
             })}
-            {pendingPatients.length > 5 && (
+            {visiblePendingPatients.length > 5 && (
               <p className="py-3 text-xs text-muted-foreground">
-                Mostrando 5 de {pendingPatients.length} pacientes. Abre Triaje
+                Mostrando 5 de {visiblePendingPatients.length} pacientes{onlyHighPriority ? " de prioridad alta sugerida" : ""}. Abre Triaje
                 para revisar los demás.
               </p>
             )}

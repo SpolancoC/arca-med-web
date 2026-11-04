@@ -35,6 +35,7 @@ import { Route as ClinicalGuidesRoute } from "@/routes/clinical-guides";
 
 import { getProfile } from "@/services/profile";
 import { Route as PatientPortalRoute } from "@/routes/patient-portal";
+import { Route as AdminHomeRoute } from "@/routes/admin.home";
 
 type PortalRole = "admin" | "medico" | "paciente";
 
@@ -42,7 +43,7 @@ function allowedPath(pathname: string, role: PortalRole): boolean {
   if (role === "paciente") return pathname === "/mi-espacio" || pathname === "/profile";
   if (["/help", "/profile", "/settings", "/guias-clinicas"].includes(pathname)) return true;
   if (role === "admin") {
-    return pathname === "/patients" || pathname === "/patients/new" ||
+    return pathname === "/admin/inicio" || pathname === "/patients" || pathname === "/patients/new" ||
       pathname === "/exercises" || pathname.startsWith("/exercises/") ||
       pathname === "/auditoria" || pathname === "/admin/usuarios";
   }
@@ -59,6 +60,7 @@ function routeComponent(pathname: string): ComponentType<any> {
   if (pathname === "/forgot-password") return ForgotPasswordRoute.component;
 
   if (pathname === "/") return DashboardRoute.component;
+  if (pathname === "/admin/inicio") return AdminHomeRoute.component;
   if (pathname === "/patients") return PatientsRoute.component;
   if (pathname === "/patients/new") return NewPatientRoute.component;
 
@@ -189,7 +191,7 @@ export default function App() {
 
         if (pathname === "/login" || (profile.rol !== "medico" && pathname === "/")) {
           navigate({
-            to: profile.rol === "admin" ? "/patients" : profile.rol === "paciente" ? "/mi-espacio" : "/",
+            to: profile.rol === "admin" ? "/admin/inicio" : profile.rol === "paciente" ? "/mi-espacio" : "/",
             replace: true,
           });
         }
@@ -297,7 +299,7 @@ export default function App() {
               Esta pantalla no está disponible para tu perfil.
             </p>
             <button type="button" className="mt-4 text-sm font-semibold text-primary underline"
-              onClick={() => navigate({ to: role === "admin" ? "/patients" : role === "paciente" ? "/mi-espacio" : "/", replace: true })}>
+              onClick={() => navigate({ to: role === "admin" ? "/admin/inicio" : role === "paciente" ? "/mi-espacio" : "/", replace: true })}>
               Volver al inicio
             </button>
           </div>

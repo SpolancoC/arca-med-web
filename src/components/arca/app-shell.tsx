@@ -33,6 +33,7 @@ const nav = [
 ] as const;
 
 const adminNav = [
+  { label: "Inicio", to: "/admin/inicio", icon: LayoutDashboard },
   { label: "Pacientes", to: "/patients", icon: Users },
   { label: "Usuarios", to: "/admin/usuarios", icon: UserCog },
   { label: "Ejercicios", to: "/exercises", icon: BookOpen },
@@ -95,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1">
-          <Link to={profile?.rol === "admin" ? "/patients" : profile?.rol === "paciente" ? "/mi-espacio" : "/"} className="flex min-w-0 items-center gap-2.5">
+          <Link to={profile?.rol === "admin" ? "/admin/inicio" : profile?.rol === "paciente" ? "/mi-espacio" : "/"} className="flex min-w-0 items-center gap-2.5">
             <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary font-display text-base font-semibold text-primary-foreground">
               A
             </div>

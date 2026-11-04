@@ -1,65 +1,72 @@
+import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
-import { Info, Users } from "lucide-react";
+import { AlertCircle, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/arca/clinical";
 import { BackButton, PageHeader } from "@/components/arca/ui-kit";
+import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
 
 export const Route = createFileRoute("/dashboard/active")({
-  head: () => ({
-    meta: [
-      { title: "Pacientes activos — ARCA Med" },
-      {
-        name: "description",
-        content: "Estado de la integración del directorio médico de pacientes.",
-      },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Pacientes activos — ARCA Med" }] }),
   component: ActivePatients,
 });
 
 function ActivePatients() {
+  const [patients, setPatients] = useState<RegisteredPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    void getMedicalPatients().then(
+      (items) => {
+        if (!active) return;
+        setPatients(items);
+        setLoading(false);
+      },
+      (cause: unknown) => {
+        if (!active) return;
+        setPatients([]);
+        setLoading(false);
+        setError(cause instanceof Error ? cause.message : "No fue posible cargar el directorio médico.");
+      },
+    );
+    return () => { active = false; };
+  }, [reload]);
+
   return (
     <div className="space-y-5">
       <PageHeader
         back={<BackButton to="/">Volver al panel</BackButton>}
         eyebrow="Panel principal"
         title="Pacientes activos"
-        description="Listado de pacientes en seguimiento médico."
+        description="Cuentas activas con rol paciente disponibles en el directorio médico. No representa pacientes necesariamente en tratamiento."
       />
-
-      <Section
-        title="Directorio médico pendiente"
-        description="Sin datos de pacientes activos disponibles en el backend actual"
-      >
-        <div className="mt-4 flex items-start gap-3 rounded-md border border-dashed border-border p-4">
-          <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              El backend todavía no expone GET /pacientes para el rol médico ni
-              un estado de seguimiento activo. Por eso, no es posible calcular
-              el total de pacientes activos ni mostrar sus fichas en este
-              listado.
-            </p>
-
-            <p>
-              Los pacientes de Triaje corresponden a prediagnósticos pendientes:
-              no equivalen al directorio de pacientes activos.
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm" variant="secondary">
-                <Link to="/patients">
-                  <Users className="size-4" />
-                  Ir a Pacientes
-                </Link>
-              </Button>
-
-              <Button asChild size="sm" variant="outline">
-                <Link to="/triage">Ver Triaje pendiente</Link>
-              </Button>
+      <Section title="Directorio médico" description="Información real obtenida mediante GET /pacientes">
+        <div className="mt-4 space-y-4">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Cargando pacientes…</p>
+          ) : error ? (
+            <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 p-4 text-sm text-destructive">
+              <AlertCircle className="size-4" /> No se pudo cargar el directorio: {error}
+              <Button variant="secondary" size="sm" onClick={() => setReload((x) => x + 1)}><RefreshCw className="size-4" /> Reintentar</Button>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface-raised/55 p-4">
+              <div className="flex items-center gap-3">
+                <Users className="size-5 text-primary" />
+                <div>
+                  <p className="text-2xl font-semibold">{patients.length}</p>
+                  <p className="text-xs text-muted-foreground">{patients.length === 1 ? "Paciente activo registrado" : "Pacientes activos registrados"}</p>
+                </div>
+              </div>
+              <Button variant="secondary" asChild size="sm"><Link to="/patients">Abrir directorio</Link></Button>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Los pacientes pendientes de triaje se consultan por separado y no equivalen al total del directorio.</p>
         </div>
       </Section>
     </div>

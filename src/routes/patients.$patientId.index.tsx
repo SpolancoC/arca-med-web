@@ -16,6 +16,7 @@ import {
 import { Dumbbell } from "lucide-react";
 
 import { getExercises, type Exercise } from "@/services/exercises";
+import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
 
 export const Route = createFileRoute("/patients/$patientId/")({
   head: () => ({
@@ -42,16 +43,44 @@ function getPriority(value: string): Priority | null {
   }
 }
 
+// El backend almacena los diagnósticos como JSON; validamos su forma antes de mostrarlos.
+function formatDifferential(value: unknown): { name: string; estimate?: number } | null {
+  if (typeof value === "string" && value.trim()) {
+    return { name: value.trim() };
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  if (typeof item.diagnostico !== "string" || !item.diagnostico.trim()) return null;
+  const estimate = item.probabilidad;
+  return {
+    name: item.diagnostico.trim(),
+    ...(typeof estimate === "number" && Number.isFinite(estimate) && estimate >= 0 && estimate <= 100
+      ? { estimate }
+      : {}),
+  };
+}
+
+function formatRecordDate(value: string): string | null {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleDateString("es-CL", { year: "numeric", month: "short", day: "numeric" });
+}
+
 function PatientDetail() {
   const { patientId } = Route.useParams();
   const id = Number(patientId);
 
+  const [patient, setPatient] = useState<RegisteredPatient | null>(null);
+  const [patientError, setPatientError] = useState<string | null>(null);
   const [summary, setSummary] = useState<PatientSummary | null>(null);
   const [symptoms, setSymptoms] = useState<PatientSymptom[]>([]);
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
+  const [symptomsError, setSymptomsError] = useState<string | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [summaryMissing, setSummaryMissing] = useState(false);
+  const [summaryLoadError, setSummaryLoadError] = useState(false);
 
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [exercisesLoading, setExercisesLoading] = useState(true);
@@ -63,6 +92,7 @@ function PatientDetail() {
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   const isDoctor = localStorage.getItem("arca-med-role") === "medico";
+  const fromDirectory = new URLSearchParams(window.location.search).get("desde") === "directorio";
 
   async function handleReviewSummary() {
     if (!isDoctor || !summary || reviewing) return;
@@ -71,7 +101,10 @@ function PatientDetail() {
     setReviewError(null);
 
     try {
-      await reviewPatientSummary(id);
+      const result = await reviewPatientSummary(id);
+      if (result.id !== id || result.revisado_por_medico !== true) {
+        throw new Error("El servidor no confirmó la revisión del resumen. Comprueba el estado antes de intentarlo nuevamente.");
+      }
       setReviewSuccess(true);
     } catch (err) {
       setReviewError(
@@ -96,11 +129,38 @@ function PatientDetail() {
     setLoading(true);
     setError(null);
     setSummary(null);
+    setPatient(null);
+    setPatientError(null);
+    setReviewSuccess(false);
+    setReviewError(null);
     setSummaryMissing(false);
+    setSummaryLoadError(false);
     setSymptoms([]);
     setDocuments([]);
+    setSymptomsError(null);
+    setDocumentsError(null);
 
     async function loadPatient() {
+      // GET /pacientes es la fuente de identidad del directorio medico.
+      // No mostramos datos clinicos cuando el ID no corresponde a un paciente activo.
+      try {
+        const registered = await getMedicalPatients();
+        if (!active) return;
+
+        const selected = registered.find((entry) => entry.id === id);
+        if (!selected) {
+          setPatientError("El paciente no se encuentra en el directorio médico de pacientes activos.");
+          setLoading(false);
+          return;
+        }
+        setPatient(selected);
+      } catch (err) {
+        if (!active) return;
+        setPatientError(err instanceof Error ? err.message : "No se pudo verificar la identidad del paciente.");
+        setLoading(false);
+        return;
+      }
+
       const results = await Promise.allSettled([
         getPatientSummary(id),
         getPatientSymptoms(id),
@@ -119,6 +179,7 @@ function PatientDetail() {
         if (status === 404) {
           setSummaryMissing(true);
         } else {
+          setSummaryLoadError(true);
           setError("No se pudo cargar el resumen clínico.");
         }
       }
@@ -126,21 +187,13 @@ function PatientDetail() {
       if (symptomsResult.status === "fulfilled") {
         setSymptoms(symptomsResult.value);
       } else {
-        setError((current) =>
-          current
-            ? `${current} Tampoco se pudieron cargar los síntomas.`
-            : "No se pudieron cargar los síntomas.",
-        );
+        setSymptomsError("No fue posible cargar los síntomas. Intenta volver a abrir la ficha.");
       }
 
       if (documentsResult.status === "fulfilled") {
         setDocuments(documentsResult.value);
       } else {
-        setError((current) =>
-          current
-            ? `${current} Tampoco se pudieron cargar los documentos.`
-            : "No se pudieron cargar los documentos.",
-        );
+        setDocumentsError("No fue posible cargar los documentos. Intenta volver a abrir la ficha.");
       }
 
       setLoading(false);
@@ -207,6 +260,25 @@ function PatientDetail() {
     return <p className="text-destructive">{error}</p>;
   }
 
+  if (!patient) {
+    return (
+      <div className="space-y-5">
+        {isDoctor && (
+          <Link
+            to={fromDirectory ? "/patients" : "/triage"}
+            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <ArrowLeft className="size-4" />
+            {fromDirectory ? "Volver a Pacientes" : "Volver a Triaje"}
+          </Link>
+        )}
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-card/75 p-5 text-sm text-destructive shadow-clinical">
+          {patientError || "No fue posible identificar a este paciente."}
+        </div>
+      </div>
+    );
+  }
+
   const priority = summary ? getPriority(summary.urgencia_sugerida) : null;
 
   const exerciseRegions = [
@@ -221,11 +293,11 @@ function PatientDetail() {
     <div className="space-y-5">
       {isDoctor && (
         <Link
-          to="/triage"
+          to={fromDirectory ? "/patients" : "/triage"}
           className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
         >
           <ArrowLeft className="size-4" />
-          Volver a Triaje
+          {fromDirectory ? "Volver a Pacientes" : "Volver a Triaje"}
         </Link>
       )}
       <header className="rounded-lg border border-border bg-card/75 p-5 shadow-clinical">
@@ -235,10 +307,10 @@ function PatientDetail() {
               Ficha clínica
             </p>
             <h1 className="mt-1 font-display text-3xl font-semibold">
-              Paciente #{id}
+              Paciente: {patient.nombre}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Información obtenida desde ARCA Med
+              {patient.email}
             </p>
           </div>
 
@@ -260,17 +332,21 @@ function PatientDetail() {
       <div className="grid gap-4 xl:grid-cols-3">
         <Section title="Síntomas registrados">
           <div className="mt-3 space-y-3 text-sm">
-            {symptoms.length === 0 ? (
+            {symptomsError ? (
+              <p role="alert" className="text-destructive">{symptomsError}</p>
+            ) : symptoms.length === 0 ? (
               <p className="text-muted-foreground">
-                No hay síntomas disponibles.
+                Este paciente no tiene síntomas registrados.
               </p>
             ) : (
               symptoms.map((symptom) => (
                 <div key={symptom.id} className="border-b border-border pb-2">
-                  <p>{symptom.descripcion}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {new Date(symptom.creado_en).toLocaleDateString("es-CL")}
-                  </p>
+                  <p className="whitespace-pre-wrap break-words">{symptom.descripcion}</p>
+                  {formatRecordDate(symptom.creado_en) && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Registrado el {formatRecordDate(symptom.creado_en)}
+                    </p>
+                  )}
                 </div>
               ))
             )}
@@ -286,18 +362,27 @@ function PatientDetail() {
 
         <Section title="Documentos relevantes">
           <div className="mt-3 space-y-2">
-            {documents.length === 0 ? (
+            {documentsError ? (
+              <p role="alert" className="text-sm text-destructive">{documentsError}</p>
+            ) : documents.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No hay documentos disponibles.
+                Este paciente no tiene documentos registrados.
               </p>
             ) : (
               documents.map((document) => (
                 <div
                   key={document.id}
-                  className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"
+                  className="flex items-start gap-2 rounded-md border border-border p-3 text-sm"
                 >
-                  <FileText className="size-4 text-primary" />
-                  <span>{document.nombre_archivo}</span>
+                  <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="break-all font-medium">{document.nombre_archivo}</p>
+                    {formatRecordDate(document.subido_en) && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Subido el {formatRecordDate(document.subido_en)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -316,7 +401,9 @@ function PatientDetail() {
               ? `Urgencia sugerida: ${summary.urgencia_sugerida}`
               : summaryMissing
                 ? "Este paciente no tiene un prediagnóstico disponible."
-                : "No hay información de triaje disponible."}
+                : summaryLoadError
+                  ? "No se pudo consultar la información de triaje."
+                  : "No hay información de triaje disponible."}
           </p>
 
           <div className="flex gap-2 rounded-md border border-info-border bg-info-soft p-3 text-xs text-info">
@@ -332,16 +419,20 @@ function PatientDetail() {
       <Section title="Resumen clínico generado por IA">
         <div className="mt-3 space-y-4">
           <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
-            {summary?.resumen_generado || "No hay resumen clínico disponible."}
+            {summary?.resumen_generado || (summaryMissing
+              ? "Este paciente aún no tiene un resumen clínico generado."
+              : summaryLoadError
+                ? "No fue posible consultar el resumen clínico."
+                : "No hay resumen clínico disponible.")}
           </p>
 
           {isDoctor && summary && (
             <div className="border-t border-border pt-4">
               {reviewSuccess ? (
                 <p role="status" className="text-sm font-medium text-green-600">
-                  Resumen marcado como revisado correctamente.
+                  El servidor confirmó el registro de la revisión médica.
                   <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    Puedes volver a Triaje para consultar el listado actualizado.
+                    Al volver a abrir esta ficha no podremos mostrar el estado guardado, porque la consulta del resumen todavía no lo devuelve.
                   </span>
                 </p>
               ) : (
@@ -355,6 +446,12 @@ function PatientDetail() {
                 </Button>
               )}
 
+              {!reviewSuccess && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Esta pantalla no puede consultar si el resumen ya fue revisado anteriormente. Confirma que corresponde registrar la revisión antes de hacerlo.
+                </p>
+              )}
+
               {reviewError && (
                 <p role="alert" className="mt-3 text-sm text-destructive">
                   {reviewError}
@@ -366,21 +463,42 @@ function PatientDetail() {
       </Section>
 
       <Section title="Diagnósticos diferenciales">
-        <div className="mt-3 space-y-2">
-          {summary?.diagnosticos_diferenciales.length ? (
-            summary.diagnosticos_diferenciales.map((diagnosis, index) => (
-              <div
-                key={index}
-                className="rounded-md border border-border p-3 text-sm"
-              >
-                {typeof diagnosis === "string"
-                  ? diagnosis
-                  : JSON.stringify(diagnosis)}
-              </div>
-            ))
+        <div className="mt-3 space-y-3">
+          {summary?.diagnosticos_diferenciales?.length ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Posibilidades sugeridas por IA para revisión médica. No son diagnósticos confirmados
+                ni probabilidades clínicas validadas.
+              </p>
+              {summary.diagnosticos_diferenciales.map((diagnosis, index) => {
+                const item = formatDifferential(diagnosis);
+                return (
+                  <div key={index} className="rounded-md border border-border p-3 text-sm">
+                    {item ? (
+                      <>
+                        <p className="font-medium">{item.name}</p>
+                        {item.estimate !== undefined && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Valor estimado por IA: {item.estimate}% (orientativo)
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Este diagnóstico no tiene un formato reconocible.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No hay diagnósticos diferenciales disponibles.
+              {summaryMissing
+                ? "Este paciente aún no tiene diagnósticos diferenciales generados."
+                : summaryLoadError
+                  ? "No se pudieron consultar los diagnósticos diferenciales."
+                  : "No hay diagnósticos diferenciales disponibles."}
             </p>
           )}
         </div>
