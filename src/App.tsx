@@ -36,6 +36,8 @@ import { Route as ClinicalGuidesRoute } from "@/routes/clinical-guides";
 import { getProfile } from "@/services/profile";
 import { Route as PatientPortalRoute } from "@/routes/patient-portal";
 import { Route as AdminHomeRoute } from "@/routes/admin.home";
+import { Route as AdminAppointmentsRoute } from "@/routes/appointments";
+import { Route as DoctorAppointmentsRoute } from "@/routes/doctor.appointments";
 
 type PortalRole = "admin" | "medico" | "paciente";
 
@@ -45,9 +47,9 @@ function allowedPath(pathname: string, role: PortalRole): boolean {
   if (role === "admin") {
     return pathname === "/admin/inicio" || pathname === "/patients" || pathname === "/patients/new" ||
       pathname === "/exercises" || pathname.startsWith("/exercises/") ||
-      pathname === "/auditoria" || pathname === "/admin/usuarios";
+      pathname === "/auditoria" || pathname === "/admin/usuarios" || pathname === "/admin/citas";
   }
-  return pathname === "/" || pathname === "/patients" ||
+  return pathname === "/" || pathname === "/agenda" || pathname === "/patients" ||
     pathname === "/triage" || pathname === "/evaluations" ||
     pathname.startsWith("/evaluations/") || pathname === "/history" ||
     pathname.startsWith("/dashboard/") ||
@@ -61,6 +63,8 @@ function routeComponent(pathname: string): ComponentType<any> {
 
   if (pathname === "/") return DashboardRoute.component;
   if (pathname === "/admin/inicio") return AdminHomeRoute.component;
+  if (pathname === "/admin/citas") return AdminAppointmentsRoute.component;
+  if (pathname === "/agenda") return DoctorAppointmentsRoute.component;
   if (pathname === "/patients") return PatientsRoute.component;
   if (pathname === "/patients/new") return NewPatientRoute.component;
 

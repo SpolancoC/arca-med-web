@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@/lib/router";
-import { Activity, ArrowRight, BookMarked, BookOpen, RefreshCw, ShieldCheck, Users, UserCog } from "lucide-react";
+import { Activity, ArrowRight, BookMarked, BookOpen, RefreshCw, CalendarDays, ShieldCheck, Users, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listAdminUsers } from "@/services/admin-users";
 import type { AdminUser } from "@/services/admin-users";
@@ -11,6 +11,7 @@ export const Route = createFileRoute("/admin/inicio")({
 });
 
 const shortcuts = [
+  { name: "Citas médicas", description: "Programar y administrar las citas de pacientes y profesionales.", to: "/admin/citas", icon: CalendarDays },
   { name: "Pacientes", description: "Consultar y administrar los pacientes registrados.", to: "/patients", icon: Users },
   { name: "Usuarios", description: "Gestionar cuentas y permisos de acceso.", to: "/admin/usuarios", icon: UserCog },
   { name: "Ejercicios", description: "Administrar la biblioteca de ejercicios.", to: "/exercises", icon: BookOpen },

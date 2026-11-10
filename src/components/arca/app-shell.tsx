@@ -8,6 +8,7 @@ import {
   BookMarked,
   ChevronLeft,
   CircleHelp,
+  CalendarDays,
   ClipboardCheck,
   History,
   LayoutDashboard,
@@ -36,12 +37,14 @@ const adminNav = [
   { label: "Inicio", to: "/admin/inicio", icon: LayoutDashboard },
   { label: "Pacientes", to: "/patients", icon: Users },
   { label: "Usuarios", to: "/admin/usuarios", icon: UserCog },
+  { label: "Citas", to: "/admin/citas", icon: CalendarDays },
   { label: "Ejercicios", to: "/exercises", icon: BookOpen },
   { label: "Auditoría", to: "/auditoria", icon: ShieldCheck },
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
 const pacienteNav = [{ label: "Mi espacio", to: "/mi-espacio", icon: Activity }];
 const medicoNav = [...nav.filter(item => item.to !== "/exercises"),
+  { label: "Mi agenda", to: "/agenda", icon: CalendarDays },
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
 

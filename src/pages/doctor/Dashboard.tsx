@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, type UserProfile } from "@/services/profile";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
 import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
+import { listAppointments, isSameLocalDay, appointmentDate, type Appointment } from "@/services/appointments";
 import {
   Activity,
   AlertCircle,
@@ -14,6 +15,7 @@ import {
   ClipboardCheck,
   Dumbbell,
   Info,
+  Plus,
   RefreshCw,
   Users,
 } from "lucide-react";
@@ -70,16 +72,29 @@ function formatSelectedDate(key: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
-/**
- * La API actual NO tiene endpoints de agenda, citas ni evaluaciones agendadas.
- * Este calendario es solamente un selector visual de fecha: no simula citas.
- */
 function DailyCalendar() {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [agendaLoading, setAgendaLoading] = useState(true);
+  const [agendaError, setAgendaError] = useState<string | null>(null);
+  const [refreshAgenda, setRefreshAgenda] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setAgendaLoading(true);
+    setAgendaError(null);
+    void listAppointments().then(items => {
+      if (active) {setAppointments(items);setAgendaLoading(false);}
+    }, error => {
+      if (active) {setAgendaError(error instanceof Error ? error.message : "No se pudo consultar la agenda.");setAgendaLoading(false);}
+    });
+    return () => {active=false;};
+  }, [refreshAgenda]);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(todayKey);
+  const dayAppointments = appointments.filter(item=>isSameLocalDay(item.fecha_hora,selectedDate));
+
 
   const year = visibleMonth.getFullYear();
   const month = visibleMonth.getMonth();
@@ -98,11 +113,19 @@ function DailyCalendar() {
   return (
     <Section
       title="Agenda de pacientes"
-      description="Calendario disponible; citas pendientes de integración con el backend"
+      description="Citas reales de tu agenda médica"
       action={
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/dashboard/today">Ver estado de agenda</Link>
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span title="Disponible cuando el backend habilite agendar citas para médicos">
+            <Button type="button" variant="secondary" size="sm" disabled aria-label="Nueva cita: pendiente de habilitación">
+              <Plus className="mr-1.5 size-4" aria-hidden="true" />
+              Nueva cita
+            </Button>
+          </span>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/agenda">Ver mi agenda</Link>
+          </Button>
+        </div>
       }
     >
       <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,1.15fr)]">
@@ -122,7 +145,7 @@ function DailyCalendar() {
                 {monthNames[month]} {year}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Calendario de fechas
+                Selecciona un día
               </p>
             </div>
             <Button
@@ -175,22 +198,12 @@ function DailyCalendar() {
                 {formatSelectedDate(selectedDate)}
               </p>
               <p className="text-xs text-muted-foreground">
-                No hay datos de agenda disponibles en la API
+                {agendaLoading ? "Cargando citas..." : agendaError ? "No se pudo consultar la agenda" : `${dayAppointments.length} cita(s) registradas`}
               </p>
             </div>
           </div>
-          <div className="mt-4 flex min-h-48 items-center justify-center rounded-lg border border-dashed border-border p-6 text-center">
-            <div>
-              <CalendarDays className="mx-auto size-7 text-muted-foreground" />
-              <p className="mt-3 text-sm font-semibold">
-                Agenda pendiente de conexión
-              </p>
-              <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
-                No es posible saber si hay citas programadas para esta fecha: el
-                backend todavía no expone un endpoint de agenda. No se muestran
-                citas de ejemplo.
-              </p>
-            </div>
+          <div className="mt-4 min-h-48 space-y-3">
+            {agendaLoading ? <p className="text-sm text-muted-foreground">Cargando citas...</p> : agendaError ? <div role="alert" className="rounded-md border border-border p-4"><p className="text-sm text-destructive">{agendaError}</p><Button className="mt-3" variant="secondary" size="sm" onClick={()=>setRefreshAgenda(n=>n+1)}>Reintentar</Button></div> : dayAppointments.length === 0 ? <div className="rounded-lg border border-dashed border-border p-6 text-center"><CalendarDays className="mx-auto size-7 text-muted-foreground"/><p className="mt-3 text-sm text-muted-foreground">No hay citas registradas para este día.</p></div> : dayAppointments.map(item=><div key={item.id} className="rounded-md border border-border bg-surface-raised p-3"><p className="text-sm font-semibold">{item.paciente_nombre}</p><p className="mt-1 text-xs text-muted-foreground">{appointmentDate(item.fecha_hora)} · {item.duracion_minutos} minutos · {item.estado}</p>{item.motivo&&<p className="mt-2 text-xs">{item.motivo}</p>}<Link to={`/patients/${item.paciente_id}`} className="mt-2 inline-block text-xs font-semibold text-primary hover:underline">Ver ficha</Link></div>)}
           </div>
         </div>
       </div>
