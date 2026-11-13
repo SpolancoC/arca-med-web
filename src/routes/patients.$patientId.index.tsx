@@ -429,7 +429,7 @@ function PatientDetail() {
       <Section title="Triaje generado por IA" description="Información orientativa para revisión y decisión del profesional">
         <div className="mt-4 space-y-5">
           <div className={`rounded-lg border p-4 ${triageTone}`}>
-            <div className="flex flex-wrap items-center gap-3"><strong className="text-sm">Sugerencia de triaje</strong>{priority && <span className={`rounded-full px-3 py-1 text-xs font-bold ${priority === "High" ? "bg-red-600 text-white" : priority === "Medium" ? "bg-yellow-400 text-yellow-950" : "bg-green-600 text-white"}`}>{priority === "High" ? "ALTA · ROJO" : priority === "Medium" ? "MEDIA · AMARILLO" : "BAJA · VERDE"}</span>}</div>
+            <div className="flex flex-wrap items-center gap-3"><strong className="text-sm">Sugerencia de triaje</strong>{priority && <span className={`rounded-full px-3 py-1 text-xs font-bold ${priority === "High" ? "bg-red-600 text-white" : priority === "Medium" ? "bg-yellow-400 text-yellow-950" : "bg-green-600 text-white"}`}>{priority === "High" ? "ALTA" : priority === "Medium" ? "MEDIA" : "BAJA"}</span>}</div>
             <p className="mt-2 text-sm">{summary ? `Prioridad sugerida: ${summary.urgencia_sugerida}` : summaryMissing ? "Este paciente aún no tiene triaje generado." : summaryLoadError ? "No se pudo consultar el triaje." : "No hay información de triaje."}</p>
           </div>
           <div className="rounded-md border border-border p-4">
