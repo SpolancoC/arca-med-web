@@ -286,8 +286,8 @@ function PatientsPage() {
                 <table className="w-full min-w-[650px] text-left text-sm">
                   <thead className="border-b border-border text-[11px] uppercase text-muted-foreground">
                     <tr>
-                      <th className="pb-3 font-semibold">Paciente</th>
                       <th className="pb-3 font-semibold">Identificador</th>
+                      <th className="pb-3 font-semibold">Paciente</th>
                       <th className="pb-3 font-semibold">Correo electrónico</th>
                       <th className="pb-3 font-semibold">Estado</th>
                       <th className="pb-3 text-right font-semibold">
@@ -299,6 +299,7 @@ function PatientsPage() {
                   <tbody className="divide-y divide-border">
                     {filteredPatients.map((patient) => (
                       <tr key={patient.id}>
+                        <td className="py-4">#{patient.id}</td>
                         <td className="py-4">
                           <div className="flex items-center gap-3">
                             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
@@ -321,8 +322,6 @@ function PatientsPage() {
                             )}
                           </div>
                         </td>
-
-                        <td className="py-4">#{patient.id}</td>
 
                         <td className="py-4 text-muted-foreground">
                           {patient.email}
@@ -379,11 +378,6 @@ function PatientsPage() {
               </div>
             )}
 
-            {isDoctor && <div className="mt-4 border-t border-border pt-4">
-              <Button asChild variant="secondary">
-                <Link to="/triage">Ir a Triaje</Link>
-              </Button>
-            </div>}
           </div>
         </Section>
           {isAdmin && editing && (

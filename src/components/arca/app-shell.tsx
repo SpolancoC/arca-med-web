@@ -3,7 +3,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
   ShieldCheck,
-  Bell,
   BookOpen,
   BookMarked,
   ChevronLeft,
@@ -14,7 +13,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Search,
   Settings,
   Users,
   UserCog,
@@ -23,6 +21,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getProfile, type UserProfile } from "@/services/profile";
+import { NotificationBell } from "@/components/arca/notification-bell";
+import { GlobalSearch } from "@/components/arca/global-search";
 
 const nav = [
   { label: "Panel principal", to: "/", icon: LayoutDashboard },
@@ -42,8 +42,11 @@ const adminNav = [
   { label: "Auditoría", to: "/auditoria", icon: ShieldCheck },
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
-const pacienteNav = [{ label: "Mi espacio", to: "/mi-espacio", icon: Activity }];
-const medicoNav = [...nav.filter(item => item.to !== "/exercises"),
+const pacienteNav = [
+  { label: "Mi espacio", to: "/mi-espacio", icon: Activity },
+];
+const medicoNav = [
+  ...nav.filter((item) => item.to !== "/exercises"),
   { label: "Mi agenda", to: "/agenda", icon: CalendarDays },
   { label: "Guías clínicas", to: "/guias-clinicas", icon: BookMarked },
 ];
@@ -70,15 +73,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
-  const currentNav = profile?.rol === "admin" ? adminNav : profile?.rol === "paciente" ? pacienteNav : medicoNav;
-  const title = pathname.includes("/evaluation/camera")
-    ? "Cámara de evaluación"
-    : pathname.endsWith("/evaluation")
-      ? "Nueva evaluación"
-      : pathname.startsWith("/patients/")
-        ? "Ficha del paciente"
-        : (currentNav.find((item) => item.to === pathname)?.label ??
-          "Espacio clínico");
+  const currentNav =
+    profile?.rol === "admin"
+      ? adminNav
+      : profile?.rol === "paciente"
+        ? pacienteNav
+        : medicoNav;
+  const title = pathname.startsWith("/patients/")
+    ? "Ficha del paciente"
+    : (currentNav.find((item) => item.to === pathname)?.label ??
+      "Espacio clínico");
 
   if (pathname === "/login") return children;
 
@@ -99,7 +103,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-1">
-          <Link to={profile?.rol === "admin" ? "/admin/inicio" : profile?.rol === "paciente" ? "/mi-espacio" : "/"} className="flex min-w-0 items-center gap-2.5">
+          <Link
+            to={
+              profile?.rol === "admin"
+                ? "/admin/inicio"
+                : profile?.rol === "paciente"
+                  ? "/mi-espacio"
+                  : "/"
+            }
+            className="flex min-w-0 items-center gap-2.5"
+          >
             <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary font-display text-base font-semibold text-primary-foreground">
               A
             </div>
@@ -260,24 +273,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {title}
               </span>
               <div className="hidden h-4 w-px bg-border sm:block" />
-              <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-surface-raised/70 px-3 py-2 sm:max-w-sm">
-                <Search className="size-4 shrink-0 text-muted-foreground" />
-                <input
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                  placeholder="Buscar pacientes, patologías, ejercicios"
-                />
-              </label>
+              <GlobalSearch role={profile?.rol} />
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label="Notificaciones"
-                className="relative"
-              >
-                <Bell className="size-4" />
-                <span className="absolute right-2 top-2 size-1.5 rounded-full bg-accent" />
-              </Button>
+              <NotificationBell profile={profile} />
               <span className="hidden rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary sm:inline">
                 {profile?.rol === "medico" ? "Médico" : (profile?.rol ?? "")}
               </span>

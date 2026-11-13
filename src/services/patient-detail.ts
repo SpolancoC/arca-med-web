@@ -3,6 +3,8 @@ import { apiRequest } from "@/services/api";
 export interface PatientMetric {
   // El backend puede omitir lado en /resumen; la interfaz lo trata como opcional.
   lado?: string | null;
+  // Disponible si el backend amplía MetricaResumen con la fecha real de medición.
+  medido_en?: string | null;
   articulacion: string;
   angulo_maximo: number;
   angulo_minimo: number;

@@ -24,16 +24,19 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const QUICK_ACCESS = {
-  admin: {
-    email: "admin@arcamed.com",
-    password: "Arcamed2026",
-  },
-  medico: {
-    email: "camila.rojas@arcamed.com",
-    password: "Arcamed2026",
-  },
-};
+type QuickRole = "admin" | "soporte" | "medico";
+type QuickCredentials = { email: string; password: string };
+
+// Vite solo inyecta estos datos al iniciar el servidor de desarrollo.
+// En npm run build, la configuración siempre es null.
+declare const __ARCA_DEV_QUICK_ACCESS__: Partial<Record<QuickRole, QuickCredentials>> | null;
+
+const canUseQuickAccess =
+  import.meta.env.DEV &&
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+const QUICK_ACCESS = canUseQuickAccess ? __ARCA_DEV_QUICK_ACCESS__ : null;
 
 function LoginPage() {
   const navigate = useNavigate({ from: "/login" });
@@ -43,12 +46,15 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function quickLogin(role: "admin" | "medico") {
+  async function quickLogin(role: QuickRole) {
     setError("");
     setLoading(true);
 
     try {
-      const credentials = QUICK_ACCESS[role];
+      const credentials = QUICK_ACCESS?.[role];
+      if (!credentials?.email || !credentials?.password) {
+        throw new Error("Acceso rápido no configurado en .env.local");
+      }
 
       const response = await login(credentials);
 
@@ -174,25 +180,21 @@ function LoginPage() {
                 </Button>
               </span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void quickLogin("admin")}
-                disabled={loading}
-              >
-                Acceso rápido Admin
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void quickLogin("medico")}
-                disabled={loading}
-              >
-                Acceso rápido Médico
-              </Button>
-            </div>
+            {QUICK_ACCESS && (
+              <div className="grid grid-cols-3 gap-2">
+                {(["admin", "soporte", "medico"] as const).map((role) => (
+                  <Button
+                    key={role}
+                    type="button"
+                    variant="outline"
+                    onClick={() => void quickLogin(role)}
+                    disabled={loading || !QUICK_ACCESS[role]?.password}
+                  >
+                    {role === "admin" ? "Admin" : role === "soporte" ? "Soporte" : "Médico"}
+                  </Button>
+                ))}
+              </div>
+            )}
 
             <div className="flex justify-end">
               <Link

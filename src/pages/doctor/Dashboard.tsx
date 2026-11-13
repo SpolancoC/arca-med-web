@@ -2,7 +2,6 @@ import { Link, createFileRoute } from "@/lib/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, type UserProfile } from "@/services/profile";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
-import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
 import { listAppointments, isSameLocalDay, appointmentDate, type Appointment } from "@/services/appointments";
 import {
   Activity,
@@ -13,8 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
-  Dumbbell,
-  Info,
   Plus,
   RefreshCw,
   Users,
@@ -22,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Section, StatCard, TriageBadge } from "@/components/arca/clinical";
 import type { Priority } from "@/lib/arca-data";
+import { CreateAppointmentDialog } from "@/components/arca/create-appointment-dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -77,6 +75,7 @@ function DailyCalendar() {
   const [agendaLoading, setAgendaLoading] = useState(true);
   const [agendaError, setAgendaError] = useState<string | null>(null);
   const [refreshAgenda, setRefreshAgenda] = useState(0);
+  const [showCreateAppointment, setShowCreateAppointment] = useState(false);
   useEffect(() => {
     let active = true;
     setAgendaLoading(true);
@@ -111,17 +110,16 @@ function DailyCalendar() {
   };
 
   return (
+    <>
     <Section
       title="Agenda de pacientes"
       description="Citas reales de tu agenda médica"
       action={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span title="Disponible cuando el backend habilite agendar citas para médicos">
-            <Button type="button" variant="secondary" size="sm" disabled aria-label="Nueva cita: pendiente de habilitación">
-              <Plus className="mr-1.5 size-4" aria-hidden="true" />
-              Nueva cita
-            </Button>
-          </span>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setShowCreateAppointment(true)}>
+            <Plus className="mr-1.5 size-4" aria-hidden="true" />
+            Nueva cita
+          </Button>
           <Button asChild variant="ghost" size="sm">
             <Link to="/agenda">Ver mi agenda</Link>
           </Button>
@@ -208,6 +206,13 @@ function DailyCalendar() {
         </div>
       </div>
     </Section>
+    <CreateAppointmentDialog
+      open={showCreateAppointment}
+      onClose={() => setShowCreateAppointment(false)}
+      initialDate={selectedDate}
+      onCreated={() => setRefreshAgenda((value) => value + 1)}
+    />
+    </>
   );
 }
 
@@ -271,9 +276,6 @@ function uniquePendingPatients(items: TriagePatient[]): TriagePatient[] {
 function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [pendingTriage, setPendingTriage] = useState<TriagePatient[]>([]);
-  const [medicalPatients, setMedicalPatients] = useState<RegisteredPatient[]>([]);
-  const [loadingPatients, setLoadingPatients] = useState(true);
-  const [patientsError, setPatientsError] = useState<string | null>(null);
   const [loadingTriage, setLoadingTriage] = useState(true);
   const [triageError, setTriageError] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -327,27 +329,6 @@ function Dashboard() {
     };
   }, [refreshVersion]);
 
-  // Directorio real de pacientes activos, independiente del triaje.
-  useEffect(() => {
-    let active = true;
-    setLoadingPatients(true);
-    setPatientsError(null);
-    void getMedicalPatients().then(
-      (items) => {
-        if (!active) return;
-        setMedicalPatients(items);
-        setLoadingPatients(false);
-      },
-      (error: unknown) => {
-        if (!active) return;
-        setMedicalPatients([]);
-        setLoadingPatients(false);
-        setPatientsError(error instanceof Error ? error.message : "No se pudo consultar el directorio médico.");
-      },
-    );
-    return () => { active = false; };
-  }, [refreshVersion]);
-
   // Refrescar al regresar a la pestaña después de revisar a un paciente.
   useEffect(() => {
     const onVisible = () => {
@@ -389,7 +370,7 @@ function Dashboard() {
             {getGreeting()}, {profile?.nombre ?? "Usuario"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Información del directorio médico y triaje en tiempo real; algunos módulos aún requieren integración.
+            Información de tu agenda médica y triaje; las evaluaciones requieren integración.
           </p>
         </div>
         <Button
@@ -397,24 +378,18 @@ function Dashboard() {
           variant="secondary"
           size="sm"
           onClick={refresh}
-          disabled={loadingTriage || loadingPatients}
+          disabled={loadingTriage}
         >
           <RefreshCw className="size-4" />{" "}
-          {loadingTriage || loadingPatients ? "Actualizando…" : "Actualizar"}
+          {loadingTriage ? "Actualizando…" : "Actualizar"}
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
-          label="Pacientes activos"
-          value={loadingPatients ? "…" : patientsError ? "—" : String(medicalPatients.length)}
-          detail={patientsError ? "No se pudo consultar el directorio" : "Cuentas de pacientes activas"}
-          icon={Users}
-        />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <StatCard
           label="Evaluaciones de hoy"
           value="—"
-          detail="Sin endpoint de evaluaciones"
+          detail="No hay evaluaciones hoy"
           icon={ClipboardCheck}
         />
         <StatCard
@@ -428,6 +403,7 @@ function Dashboard() {
           icon={Activity}
           tone="attention"
         />
+        {/* PENDIENTE: Revisiones de ejercicios. Reactivar al integrar el servicio.
         <StatCard
           label="Revisiones de ejercicios pendientes"
           value="—"
@@ -435,15 +411,8 @@ function Dashboard() {
           icon={Dumbbell}
           tone="accent"
         />
+        */}
       </div>
-
-      {patientsError && (
-        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 p-3 text-sm text-destructive">
-          <AlertCircle className="size-4 shrink-0" />
-          <span>No se pudo cargar el directorio médico: {patientsError}. El total de pacientes no está disponible.</span>
-          <Button type="button" variant="secondary" size="sm" onClick={refresh}>Reintentar</Button>
-        </div>
-      )}
 
       <Section title="Accesos rápidos" description="Herramientas disponibles para el trabajo clínico">
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -578,6 +547,7 @@ function Dashboard() {
         )}
       </Section>
 
+      {/* PENDIENTE: Evaluaciones recientes. Reactivar con datos reales de evaluaciones móviles.
       <Section
         title="Evaluaciones recientes"
         description="Historial médico pendiente de endpoint"
@@ -591,6 +561,7 @@ function Dashboard() {
           </p>
         </div>
       </Section>
+      */}
     </div>
   );
 }

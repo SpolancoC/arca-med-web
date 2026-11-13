@@ -7,8 +7,6 @@ import { Route as DashboardRoute } from "@/pages/doctor/Dashboard";
 import { Route as LoginRoute } from "@/routes/login";
 import { Route as PatientsRoute } from "@/routes/patients.index";
 import { Route as PatientDetailRoute } from "@/routes/patients.$patientId.index";
-import { Route as EvaluationRoute } from "@/routes/patients.$patientId.evaluation.index";
-import { Route as CameraRoute } from "@/routes/patients.$patientId.evaluation.camera";
 import { Route as EvaluationsRoute } from "@/routes/evaluations";
 import { Route as ExercisesRoute } from "@/routes/exercises";
 import { Route as HistoryRoute } from "@/routes/history";
@@ -18,7 +16,6 @@ import { Route as AttentionRoute } from "@/routes/dashboard.attention";
 import { Route as ExerciseReviewsRoute } from "@/routes/dashboard.exercise-reviews";
 import { Route as TodayRoute } from "@/routes/dashboard.today";
 import { Route as EvaluationDetailRoute } from "@/routes/evaluations.$evaluationId";
-import { Route as NewEvaluationRoute } from "@/routes/evaluations.new";
 import { Route as NewExerciseRoute } from "@/routes/exercises.new";
 import { Route as ExerciseDetailRoute } from "@/routes/exercises.$exerciseId.index";
 import { Route as ExerciseEditRoute } from "@/routes/exercises.$exerciseId.edit";
@@ -42,18 +39,39 @@ import { Route as DoctorAppointmentsRoute } from "@/routes/doctor.appointments";
 type PortalRole = "admin" | "medico" | "paciente";
 
 function allowedPath(pathname: string, role: PortalRole): boolean {
-  if (role === "paciente") return pathname === "/mi-espacio" || pathname === "/profile";
-  if (["/help", "/profile", "/settings", "/guias-clinicas"].includes(pathname)) return true;
-  if (role === "admin") {
-    return pathname === "/admin/inicio" || pathname === "/patients" || pathname === "/patients/new" ||
-      pathname === "/exercises" || pathname.startsWith("/exercises/") ||
-      pathname === "/auditoria" || pathname === "/admin/usuarios" || pathname === "/admin/citas";
+  if (
+    /^\/patients\/[^/]+\/evaluation(?:\/camera)?\/?$/.test(pathname) ||
+    pathname === "/evaluations/new"
+  ) {
+    return false;
   }
-  return pathname === "/" || pathname === "/agenda" || pathname === "/patients" ||
-    pathname === "/triage" || pathname === "/evaluations" ||
-    pathname.startsWith("/evaluations/") || pathname === "/history" ||
+  if (role === "paciente")
+    return pathname === "/mi-espacio" || pathname === "/profile";
+  if (["/help", "/profile", "/settings", "/guias-clinicas"].includes(pathname))
+    return true;
+  if (role === "admin") {
+    return (
+      pathname === "/admin/inicio" ||
+      pathname === "/patients" ||
+      pathname === "/patients/new" ||
+      pathname === "/exercises" ||
+      pathname.startsWith("/exercises/") ||
+      pathname === "/auditoria" ||
+      pathname === "/admin/usuarios" ||
+      pathname === "/admin/citas"
+    );
+  }
+  return (
+    pathname === "/" ||
+    pathname === "/agenda" ||
+    pathname === "/patients" ||
+    pathname === "/triage" ||
+    pathname === "/evaluations" ||
+    pathname.startsWith("/evaluations/") ||
+    pathname === "/history" ||
     pathname.startsWith("/dashboard/") ||
-    /^\/patients\/[^/]+(?:\/(?:evaluation(?:\/camera)?|history|recommend))?\/?$/.test(pathname);
+    /^\/patients\/[^/]+(?:\/(?:history|recommend))?\/?$/.test(pathname)
+  );
 }
 
 function routeComponent(pathname: string): ComponentType<any> {
@@ -79,12 +97,6 @@ function routeComponent(pathname: string): ComponentType<any> {
 
   if (/^\/dashboard\/today\/?$/.test(pathname)) return TodayRoute.component;
 
-  if (/^\/patients\/[^/]+\/evaluation\/camera\/?$/.test(pathname))
-    return CameraRoute.component;
-
-  if (/^\/patients\/[^/]+\/evaluation\/?$/.test(pathname))
-    return EvaluationRoute.component;
-
   if (/^\/patients\/[^/]+\/history\/?$/.test(pathname))
     return PatientHistoryRoute.component;
 
@@ -95,7 +107,6 @@ function routeComponent(pathname: string): ComponentType<any> {
     return PatientDetailRoute.component;
 
   if (pathname === "/evaluations") return EvaluationsRoute.component;
-  if (pathname === "/evaluations/new") return NewEvaluationRoute.component;
 
   if (/^\/evaluations\/[^/]+\/?$/.test(pathname))
     return EvaluationDetailRoute.component;
@@ -122,9 +133,25 @@ function routeComponent(pathname: string): ComponentType<any> {
 }
 
 function NotFoundPage() {
-  return <div role="alert" className="rounded-md border border-border bg-surface-raised p-6"><h1 className="text-lg font-semibold">Página no encontrada</h1><p className="mt-2 text-sm text-muted-foreground">La dirección solicitada no existe en ARCA Med.</p><button type="button" className="mt-4 text-sm font-semibold text-primary underline" onClick={() => navigate({to: "/", replace: true})}>Volver al inicio</button></div>;
+  return (
+    <div
+      role="alert"
+      className="rounded-md border border-border bg-surface-raised p-6"
+    >
+      <h1 className="text-lg font-semibold">Página no encontrada</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        La dirección solicitada no existe en ARCA Med.
+      </p>
+      <button
+        type="button"
+        className="mt-4 text-sm font-semibold text-primary underline"
+        onClick={() => navigate({ to: "/", replace: true })}
+      >
+        Volver al inicio
+      </button>
+    </div>
+  );
 }
-
 
 export default function App() {
   const pathname = usePathname();
@@ -168,7 +195,11 @@ export default function App() {
 
         if (!active) return;
 
-        if (profile.rol !== "medico" && profile.rol !== "admin" && profile.rol !== "paciente") {
+        if (
+          profile.rol !== "medico" &&
+          profile.rol !== "admin" &&
+          profile.rol !== "paciente"
+        ) {
           setAuthenticated(false);
 
           setAccessError(
@@ -193,9 +224,17 @@ export default function App() {
         setAuthenticated(true);
         setAuthChecked(true);
 
-        if (pathname === "/login" || (profile.rol !== "medico" && pathname === "/")) {
+        if (
+          pathname === "/login" ||
+          (profile.rol !== "medico" && pathname === "/")
+        ) {
           navigate({
-            to: profile.rol === "admin" ? "/admin/inicio" : profile.rol === "paciente" ? "/mi-espacio" : "/",
+            to:
+              profile.rol === "admin"
+                ? "/admin/inicio"
+                : profile.rol === "paciente"
+                  ? "/mi-espacio"
+                  : "/",
             replace: true,
           });
         }
@@ -235,6 +274,35 @@ export default function App() {
       active = false;
     };
   }, [pathname]);
+
+  useEffect(() => {
+    if (!authChecked || !authenticated || !role) return;
+
+    const oldEvaluationRoute = pathname.match(
+      /^\/patients\/([^/]+)\/evaluation(?:\/camera)?\/?$/,
+    );
+
+    if (oldEvaluationRoute) {
+      const patientId = oldEvaluationRoute[1];
+
+      navigate({
+        to:
+          role === "medico" && /^\d+$/.test(patientId)
+            ? `/patients/${patientId}`
+            : "/patients",
+        replace: true,
+      });
+
+      return;
+    }
+
+    if (pathname === "/evaluations/new") {
+      navigate({
+        to: "/patients",
+        replace: true,
+      });
+    }
+  }, [pathname, authChecked, authenticated, role]);
 
   if (!authChecked) {
     return null;
@@ -297,13 +365,29 @@ export default function App() {
     return (
       <>
         <AppShell>
-          <div role="alert" className="rounded-md border border-border bg-surface-raised p-6">
+          <div
+            role="alert"
+            className="rounded-md border border-border bg-surface-raised p-6"
+          >
             <h1 className="text-lg font-semibold">Acceso restringido</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Esta pantalla no está disponible para tu perfil.
             </p>
-            <button type="button" className="mt-4 text-sm font-semibold text-primary underline"
-              onClick={() => navigate({ to: role === "admin" ? "/admin/inicio" : role === "paciente" ? "/mi-espacio" : "/", replace: true })}>
+            <button
+              type="button"
+              className="mt-4 text-sm font-semibold text-primary underline"
+              onClick={() =>
+                navigate({
+                  to:
+                    role === "admin"
+                      ? "/admin/inicio"
+                      : role === "paciente"
+                        ? "/mi-espacio"
+                        : "/",
+                  replace: true,
+                })
+              }
+            >
               Volver al inicio
             </button>
           </div>
