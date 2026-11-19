@@ -2,7 +2,7 @@ import { createFileRoute } from "@/lib/router";
 import { ArrowRight, Info } from "lucide-react";
 import { Link } from "@/lib/router";
 import { useEffect, useState } from "react";
-import { Section, TriageBadge } from "@/components/arca/clinical";
+import { Section } from "@/components/arca/clinical";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
 import type { Priority } from "@/lib/arca-data";
 
@@ -138,7 +138,20 @@ function Page() {
                 key={patient.usuario_id}
                 title={patient.nombre}
                 description={`Paciente #${patient.usuario_id}`}
-                action={<TriageBadge priority={priority} />}
+                action={
+                  <span
+                    className={
+                      "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 " +
+                      (priority === "High"
+                        ? "bg-red-100 text-red-800 ring-red-300 dark:bg-red-950 dark:text-red-200 dark:ring-red-800"
+                        : priority === "Medium"
+                          ? "bg-amber-100 text-amber-800 ring-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-800"
+                          : "bg-green-100 text-green-800 ring-green-300 dark:bg-green-950 dark:text-green-200 dark:ring-green-800")
+                    }
+                  >
+                    {getPriorityLabel(priority)}
+                  </span>
+                }
               >
                 <div className="mt-4 text-sm">
                   <p className="text-xs font-semibold text-primary">

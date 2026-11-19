@@ -33,7 +33,7 @@ export function Section({
   return (
     <section
       className={cn(
-        "rounded-lg border border-border bg-card/75 p-4 shadow-clinical backdrop-blur-md sm:p-5",
+        "arca-section rounded-lg border border-border bg-card/75 p-4 shadow-clinical backdrop-blur-md sm:p-5",
         className,
       )}
     >
@@ -67,7 +67,7 @@ export function StatCard({
   tone?: "brand" | "accent" | "attention";
 }) {
   return (
-    <article className="rounded-lg border border-border bg-card/75 p-4 shadow-clinical backdrop-blur-md">
+    <article className="arca-stat-card rounded-lg border border-border bg-card/75 p-4 shadow-clinical backdrop-blur-md">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <span

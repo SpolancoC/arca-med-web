@@ -14,7 +14,7 @@ export const Route = createFileRoute("/profile")({
       {
         name: "description",
         content:
-          "Perfil profesional del médico: datos de contacto, centro y horario.",
+          "Datos de cuenta y horario de atención en ARCA Med.",
       },
       { property: "og:title", content: "Mi perfil — ARCA Med" },
       {
@@ -96,6 +96,16 @@ function Profile() {
     schedule: "",
   };
 
+  // El backend actual GET /perfil no entrega email ni telefono.
+  // No se muestran datos inventados ni se simula una edición inexistente.
+  const doctorFields = [
+    { label: "Nombre completo", value: profile?.nombre || "No disponible" },
+    { label: "Correo electrónico", value: "No disponible" },
+    { label: "Teléfono", value: "No disponible" },
+    { label: "Horario de atención", value: "08:00 a 17:00" },
+    { label: "Rol", value: "Médico" },
+  ];
+
   const handleLogout = () => {
     localStorage.removeItem("arca-med-token");
     localStorage.removeItem("arca-med-role");
@@ -134,29 +144,36 @@ function Profile() {
         </div>
 
         <dl className="mt-6 grid gap-3 sm:grid-cols-2">
-          {Object.entries(labels).map(([key, label]) => (
-            <div key={key} className="rounded-md bg-muted p-3">
-              <dt className="text-xs text-muted-foreground">{label}</dt>
-
-              <dd className="mt-0.5 min-h-5 text-sm font-semibold">
-                {profileData[key as keyof typeof profileData]}
-              </dd>
-            </div>
-          ))}
-
-          <div className="rounded-md bg-muted p-3">
-            <dt className="text-xs text-muted-foreground">Rol</dt>
-
-            <dd className="mt-0.5 min-h-5 text-sm font-semibold">
-              {roleLabel}
-            </dd>
-          </div>
+          {profile?.rol === "medico" ? (
+            doctorFields.map((field) => (
+              <div key={field.label} className="rounded-md bg-muted p-3">
+                <dt className="text-xs text-muted-foreground">{field.label}</dt>
+                <dd className="mt-0.5 min-h-5 text-sm font-semibold">{field.value}</dd>
+              </div>
+            ))
+          ) : (
+            <>
+              {Object.entries(labels).map(([key, label]) => (
+                <div key={key} className="rounded-md bg-muted p-3">
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="mt-0.5 min-h-5 text-sm font-semibold">
+                    {profileData[key as keyof typeof profileData]}
+                  </dd>
+                </div>
+              ))}
+              <div className="rounded-md bg-muted p-3">
+                <dt className="text-xs text-muted-foreground">Rol</dt>
+                <dd className="mt-0.5 min-h-5 text-sm font-semibold">{roleLabel}</dd>
+              </div>
+            </>
+          )}
         </dl>
       </Section>
 
+      {profile?.rol !== "medico" && (
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary">
-          <Link to="/settings">Cambiar contraseña</Link>
+          <Link to="/settings">Configuración</Link>
         </Button>
 
         <Button variant="ghost" onClick={handleLogout}>
@@ -164,6 +181,7 @@ function Profile() {
           Cerrar sesión
         </Button>
       </div>
+      )}
     </div>
   );
 }

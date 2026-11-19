@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   CircleHelp,
   CalendarDays,
-  ClipboardCheck,
   History,
   LayoutDashboard,
   LogOut,
@@ -23,11 +22,11 @@ import { cn } from "@/lib/utils";
 import { getProfile, type UserProfile } from "@/services/profile";
 import { NotificationBell } from "@/components/arca/notification-bell";
 import { GlobalSearch } from "@/components/arca/global-search";
+import { getSidebarPreference, setSidebarPreference, SIDEBAR_PREFERENCE_EVENT, type SidebarPreference } from "@/lib/sidebar-preference";
 
 const nav = [
   { label: "Panel principal", to: "/", icon: LayoutDashboard },
   { label: "Pacientes", to: "/patients", icon: Users },
-  { label: "Evaluaciones", to: "/evaluations", icon: ClipboardCheck },
   { label: "Triaje", to: "/triage", icon: Activity },
   { label: "Ejercicios", to: "/exercises", icon: BookOpen },
   { label: "Historial", to: "/history", icon: History },
@@ -53,8 +52,26 @@ const medicoNav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => getSidebarPreference() === "contraido");
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      const preference = (event as CustomEvent<SidebarPreference>).detail;
+      setCollapsed(preference === "contraido");
+    };
+    const updateFromOtherTab = (event: StorageEvent) => {
+      if (event.key === "arca-med-sidebar-v1") {
+        setCollapsed(getSidebarPreference() === "contraido");
+      }
+    };
+    window.addEventListener(SIDEBAR_PREFERENCE_EVENT, update);
+    window.addEventListener("storage", updateFromOtherTab);
+    return () => {
+      window.removeEventListener(SIDEBAR_PREFERENCE_EVENT, update);
+      window.removeEventListener("storage", updateFromOtherTab);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadProfile() {
@@ -113,8 +130,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             }
             className="flex min-w-0 items-center gap-2.5"
           >
-            <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary font-display text-base font-semibold text-primary-foreground">
-              A
+            <div className="grid size-9 shrink-0 place-items-center rounded-md bg-white p-1 shadow-sm" aria-hidden="true">
+              <img src="/arca-logo.svg" alt="" className="size-full object-contain" />
             </div>
             {!collapsed && (
               <div className="min-w-0 leading-tight">
@@ -236,7 +253,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             variant="ghost"
             size="icon"
             className="mt-1 hidden self-end lg:inline-flex"
-            onClick={() => setCollapsed((value) => !value)}
+            onClick={() => {
+              const next = !collapsed;
+              setCollapsed(next);
+              setSidebarPreference(next ? "contraido" : "expandido");
+            }}
             aria-label={
               collapsed ? "Expandir navegación" : "Contraer navegación"
             }
@@ -280,14 +301,30 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="hidden rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary sm:inline">
                 {profile?.rol === "medico" ? "Médico" : (profile?.rol ?? "")}
               </span>
-              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
-                {profile?.nombre
-                  ?.split(" ")
-                  .map((name) => name[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase() ?? "--"}
-              </div>
+              {(profile?.rol === "medico" || profile?.rol === "admin") ? (
+                <Link
+                  to="/profile"
+                  aria-label="Abrir mi perfil"
+                  title="Ver mi perfil"
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent-soft/70 hover:ring-2 hover:ring-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+                >
+                  {profile.nombre
+                    ?.split(" ")
+                    .map((name) => name[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase() ?? "--"}
+                </Link>
+              ) : (
+                <div className="grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+                  {profile?.nombre
+                    ?.split(" ")
+                    .map((name) => name[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase() ?? "--"}
+                </div>
+              )}
             </div>
           </div>
         </header>

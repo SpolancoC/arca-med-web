@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
 import { ArrowLeft, FileText, Info, Dumbbell, Check, X, Plus } from "lucide-react";
@@ -60,24 +61,16 @@ function formatDifferential(value: unknown): { name: string; estimate?: number }
   };
 }
 
-function formatMetricTime(value: string | null | undefined): string {
-  if (!value) return "Fecha y hora no disponibles";
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "Fecha y hora no disponibles";
-  return date.toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-}
+function formatMetricTime(value: string | null | undefined): string { return value ? formatDisplayDate(value, true) : "Fecha y hora no disponibles"; }
 
 function normalizeText(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
-function formatRecordDate(value: string): string | null {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  return date.toLocaleDateString("es-CL", { year: "numeric", month: "short", day: "numeric" });
-}
+function formatRecordDate(value: string): string | null { const date = formatDisplayDate(value); return date === "Fecha no disponible" ? null : date; }
 
 function PatientDetail() {
+  useDateStyle();
   const { patientId } = Route.useParams();
   const id = Number(patientId);
 

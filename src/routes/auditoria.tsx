@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { createFileRoute } from "@/lib/router";
 import { useEffect, useState } from "react";
 import { ClipboardList, RefreshCw, ShieldCheck, ShieldAlert } from "lucide-react";
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/auditoria")({
 });
 
 function AuditoriaPage() {
+  useDateStyle();
   const [registros, setRegistros] = useState<AuditoriaLog[]>([]);
   const [verificacion, setVerificacion] = useState<AuditoriaVerificacion | null>(null);
   const [usuario, setUsuario] = useState("");
@@ -107,7 +109,7 @@ function AuditoriaPage() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground"><tr>{["Fecha", "Usuario", "Rol", "Acción", "Afectado", "IP", "Detalle"].map(x=><th key={x} className="whitespace-nowrap px-4 py-3 font-semibold">{x}</th>)}</tr></thead>
             <tbody className="divide-y divide-border">{registros.map(log=><tr key={log.id} className="align-top hover:bg-muted/20">
-              <td className="whitespace-nowrap px-4 py-3">{new Date(log.fecha).toLocaleString("es-CL")}</td>
+              <td className="whitespace-nowrap px-4 py-3">{formatDisplayDate(log.fecha, true)}</td>
               <td className="px-4 py-3">{log.usuario_id ?? "—"}</td>
               <td className="px-4 py-3 capitalize">{log.rol}</td>
               <td className="px-4 py-3 font-medium">{log.accion.replaceAll("_", " ")}</td>

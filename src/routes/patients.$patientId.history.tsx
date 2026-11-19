@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { useEffect, useState } from "react";
 import { Link, createFileRoute, usePathname } from "@/lib/router";
 import { FileText, ArrowLeft } from "lucide-react";
@@ -9,12 +10,10 @@ export const Route = createFileRoute("/patients/$patientId/history")({
   component: PatientHistory,
 });
 
-function displayDate(date: string) {
-  const d = new Date(date);
-  return Number.isNaN(d.getTime()) ? "Fecha no disponible" : d.toLocaleString("es-CL", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", hour12:false });
-}
+function displayDate(date: string) { return formatDisplayDate(date, true); }
 
 function PatientHistory() {
+  useDateStyle();
   const { patientId } = Route.useParams();
   const pathname = usePathname();
   const [tab, setTab] = useState<"sintomas"|"examenes">(() => new URLSearchParams(window.location.search).get("tab") === "examenes" ? "examenes" : "sintomas");

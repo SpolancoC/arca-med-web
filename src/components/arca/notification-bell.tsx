@@ -6,8 +6,9 @@ import { listAppointments, type Appointment } from "@/services/appointments";
 import { getTriagePatients } from "@/services/triage";
 import { getPatientDocuments } from "@/services/patient-detail";
 import type { UserProfile } from "@/services/profile";
+import { listarAuditoria, type AuditoriaLog } from "@/services/auditoria";
 
-type NoticeKind = "appointment" | "triage" | "document";
+type NoticeKind = "appointment" | "triage" | "document" | "administration";
 type Notice = {
   id: string;
   kind: NoticeKind;
@@ -46,7 +47,7 @@ function persistReadIds(userId: number, ids: string[]) {
   }
 }
 
-function appointmentNotices(appointments: Appointment[], now: Date): Notice[] {
+function appointmentNotices(appointments: Appointment[], now: Date, admin = false): Notice[] {
   const notices: Notice[] = [];
   const today = localDay(now);
   for (const appointment of appointments) {
@@ -59,7 +60,7 @@ function appointmentNotices(appointments: Appointment[], now: Date): Notice[] {
         kind: "appointment",
         title: "Cita agendada para hoy",
         detail: `${appointment.paciente_nombre} · ${timeLabel(when)}`,
-        destination: "/agenda",
+        destination: admin ? "/admin/citas" : "/agenda",
         timestamp: when.getTime(),
       });
     } else if (when.getTime() > now.getTime() && when.getTime() <= now.getTime() + DAY) {
@@ -68,7 +69,7 @@ function appointmentNotices(appointments: Appointment[], now: Date): Notice[] {
         kind: "appointment",
         title: "Próxima cita médica",
         detail: `${appointment.paciente_nombre} · ${dateLabel(when)}`,
-        destination: "/agenda",
+        destination: admin ? "/admin/citas" : "/agenda",
         timestamp: when.getTime(),
       });
     }
@@ -76,9 +77,38 @@ function appointmentNotices(appointments: Appointment[], now: Date): Notice[] {
   return notices;
 }
 
+const ADMIN_EVENTS: Record<string, { title: string; destination: string }> = {
+  crear_usuario: { title: "Usuario creado", destination: "/admin/usuarios" },
+  editar_usuario: { title: "Usuario actualizado", destination: "/admin/usuarios" },
+  crear_cita: { title: "Cita registrada", destination: "/admin/citas" },
+  editar_cita: { title: "Cita modificada", destination: "/admin/citas" },
+  crear_guia: { title: "Guía clínica registrada", destination: "/guias-clinicas" },
+  crear_ejercicio: { title: "Ejercicio registrado", destination: "/exercises" },
+  subir_imagen_ejercicio: { title: "Imagen de ejercicio actualizada", destination: "/exercises" },
+};
+
+function adminAuditNotices(logs: AuditoriaLog[], now: Date): Notice[] {
+  const cutoff = now.getTime() - 7 * DAY;
+  return logs.flatMap(log => {
+    const info = ADMIN_EVENTS[log.accion];
+    const when = new Date(log.fecha).getTime();
+    if (!info || !Number.isFinite(when) || when < cutoff || when > now.getTime() + 60_000) return [];
+    return [{
+      id: `admin-audit:${log.id}`,
+      kind: "administration" as const,
+      title: info.title,
+      // Evitar incluir detalles que puedan contener información sensible.
+      detail: `Registro #${log.id} · ${dateLabel(new Date(when))}`,
+      destination: info.destination,
+      timestamp: when,
+    }];
+  });
+}
+
 export function NotificationBell({ profile }: { profile: UserProfile | null }) {
   const isDoctor = profile?.rol === "medico";
-  const userId = isDoctor ? profile.id : null;
+  const isAdmin = profile?.rol === "admin";
+  const userId = isDoctor || isAdmin ? profile!.id : null;
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [read, setRead] = useState<string[]>([]);
@@ -95,7 +125,7 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
   }, [userId]);
 
   const refresh = useCallback(async () => {
-    if (!isDoctor || userId === null) return;
+    if ((!isDoctor && !isAdmin) || userId === null) return;
     const currentRequest = ++requestId.current;
     setLoading(true);
     setError(null);
@@ -103,6 +133,25 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const end = new Date(start.getTime() + DAY * 3);
     try {
+      if (isAdmin) {
+        const [appointmentsResult, auditResult] = await Promise.allSettled([
+          listAppointments({ desde: start.toISOString(), hasta: end.toISOString() }),
+          listarAuditoria({ limite: 100 }),
+        ]);
+        if (currentRequest !== requestId.current) return;
+        const next: Notice[] = [];
+        const failures: string[] = [];
+        if (appointmentsResult.status === "fulfilled") {
+          next.push(...appointmentNotices(appointmentsResult.value, now, true));
+        } else failures.push("citas");
+        if (auditResult.status === "fulfilled") {
+          next.push(...adminAuditNotices(auditResult.value, now));
+        } else failures.push("auditoría");
+        next.sort((a, b) => b.timestamp - a.timestamp);
+        setNotices(next.slice(0, 100));
+        if (failures.length) setError(`No fue posible consultar: ${failures.join(" y ")}.`);
+        return;
+      }
       const [appointmentsResult, triageResult] = await Promise.allSettled([
         listAppointments({ desde: start.toISOString(), hasta: end.toISOString() }),
         getTriagePatients(),
@@ -162,10 +211,10 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
-  }, [isDoctor, userId]);
+  }, [isDoctor, isAdmin, userId]);
 
   useEffect(() => {
-    if (!isDoctor) return;
+    if (!isDoctor && !isAdmin) return;
     void refresh();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
@@ -177,7 +226,7 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [isDoctor, refresh]);
+  }, [isDoctor, isAdmin, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -204,7 +253,7 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
       return updated;
     });
   }
-  const iconFor = (kind: NoticeKind) => kind === "appointment" ? CalendarClock : kind === "triage" ? ClipboardList : FileText;
+  const iconFor = (kind: NoticeKind) => kind === "appointment" ? CalendarClock : kind === "triage" ? ClipboardList : kind === "administration" ? ClipboardList : FileText;
 
   return (
     <div className="relative" ref={container}>
@@ -240,8 +289,8 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
               </Button>
             </div>
           </div>
-          {!isDoctor ? (
-            <p className="p-4 text-sm text-muted-foreground">Los avisos automáticos están disponibles por ahora para médicos.</p>
+          {!isDoctor && !isAdmin ? (
+            <p className="p-4 text-sm text-muted-foreground">No hay avisos automáticos disponibles para este perfil.</p>
           ) : (
             <>
               {error && <p role="status" className="border-b border-border px-4 py-2 text-xs text-destructive">{error}</p>}
@@ -270,7 +319,7 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
                   <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => markRead(notices.map(n => n.id))}>Marcar todas como leídas</button>
                 </div>
               )}
-              <p className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">Se actualizan mientras el portal está abierto. Documentos: solo pacientes con citas cercanas (hasta 10).</p>
+              <p className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">Se actualizan mientras el portal está abierto. {isAdmin ? "Avisos administrativos: cambios de los últimos 7 días y próximas citas." : "Documentos: solo pacientes con citas cercanas (hasta 10)."}</p>
             </>
           )}
         </div>

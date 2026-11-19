@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,7 +6,13 @@ import {
   type RegisteredPatient,
 } from "@/services/patients";
 import { getProfile } from "@/services/profile";
-import { createAppointment, localDateToISO } from "@/services/appointments";
+import {
+  createAppointment,
+  listAppointments,
+  localDateToISO,
+  isSameLocalDay,
+  type Appointment,
+} from "@/services/appointments";
 import { ApiError } from "@/services/api";
 
 type Props = {
@@ -16,41 +22,66 @@ type Props = {
   initialDate?: string;
 };
 
-/** Muestra y recibe la fecha en formato chileno dd/mm/aaaa. */
-function formatInitialDate(isoDate?: string): string {
-  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "";
-  const [year, month, day] = isoDate.split("-");
-  return `${day}/${month}/${year}`;
+const WORK_START = 8 * 60;
+const WORK_END = 17 * 60;
+const SLOT_STEP = 30;
+
+function dateKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function maskDate(value: string): string {
-  const numbers = value.replace(/\D/g, "").slice(0, 8);
-  if (numbers.length <= 2) return numbers;
-  if (numbers.length <= 4) return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
-  return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4)}`;
+function dateFromKey(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  )
+    return null;
+  return date;
 }
 
 function toLocalDateTime(date: string, time: string): string {
-  const dateMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(date);
-  if (!dateMatch) throw new Error("Ingresa la fecha como dd/mm/aaaa.");
-  const [, dd, mm, yyyy] = dateMatch;
-  const day = Number(dd);
-  const month = Number(mm);
-  const year = Number(yyyy);
-  const calendarDate = new Date(year, month - 1, day);
-  if (
-    year < 1900 ||
-    year > 9999 ||
-    calendarDate.getFullYear() !== year ||
-    calendarDate.getMonth() !== month - 1 ||
-    calendarDate.getDate() !== day
+  if (!dateFromKey(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new Error("Selecciona una fecha y hora válidas.");
+  }
+  return `${date}T${time}`;
+}
+
+function freeSlots(
+  date: string,
+  duration: number,
+  appointments: Appointment[],
+): string[] {
+  if (!dateFromKey(date)) return [];
+  const now = Date.now();
+  const taken = appointments.filter(
+    (appointment) =>
+      appointment.estado === "programada" &&
+      isSameLocalDay(appointment.fecha_hora, date),
+  );
+  const slots: string[] = [];
+  for (
+    let minuteOfDay = WORK_START;
+    minuteOfDay + duration <= WORK_END;
+    minuteOfDay += SLOT_STEP
   ) {
-    throw new Error("Ingresa una fecha válida.");
+    const hh = String(Math.floor(minuteOfDay / 60)).padStart(2, "0");
+    const mm = String(minuteOfDay % 60).padStart(2, "0");
+    const start = new Date(`${date}T${hh}:${mm}`).getTime();
+    const end = start + duration * 60_000;
+    if (start <= now) continue;
+    const overlapping = taken.some((appointment) => {
+      const reservedStart = new Date(appointment.fecha_hora).getTime();
+      const reservedEnd = reservedStart + appointment.duracion_minutos * 60_000;
+      return start < reservedEnd && end > reservedStart;
+    });
+    if (!overlapping) slots.push(`${hh}:${mm}`);
   }
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-    throw new Error("Ingresa una hora válida de 00:00 a 23:59.");
-  }
-  return `${yyyy}-${mm}-${dd}T${time}`;
+  return slots;
 }
 
 /** Ventana compartida por el panel médico y la agenda. */
@@ -73,9 +104,15 @@ function AppointmentDialogContent({
   const [patients, setPatients] = useState<RegisteredPatient[]>([]);
   const [doctorId, setDoctorId] = useState<number | null>(null);
   const [patientId, setPatientId] = useState("");
-  const [date, setDate] = useState(() => formatInitialDate(initialDate));
-  const [hour, setHour] = useState("09");
-  const [minute, setMinute] = useState("00");
+  const [date, setDate] = useState(() =>
+    initialDate && dateFromKey(initialDate) ? initialDate : dateKey(new Date()),
+  );
+  const [hour, setHour] = useState("");
+  const [minute, setMinute] = useState("");
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loadingTimes, setLoadingTimes] = useState(false);
+  const [timesError, setTimesError] = useState<string | null>(null);
+  const [refreshTimes, setRefreshTimes] = useState(0);
   const [duration, setDuration] = useState(30);
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -111,6 +148,72 @@ function AppointmentDialogContent({
       active = false;
     };
   }, []);
+
+  // Consultar las citas del médico para el día elegido (con límites en hora local).
+  useEffect(() => {
+    if (!doctorId || !dateFromKey(date)) {
+      setAppointments([]);
+      return;
+    }
+    let active = true;
+    const start = new Date(`${date}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    setLoadingTimes(true);
+    setTimesError(null);
+    setAppointments([]);
+    void listAppointments({
+      medico_id: doctorId,
+      desde: start.toISOString(),
+      hasta: end.toISOString(),
+    })
+      .then((result) => {
+        if (active) setAppointments(result);
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setTimesError(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo consultar la disponibilidad.",
+          );
+      })
+      .finally(() => {
+        if (active) setLoadingTimes(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [doctorId, date, refreshTimes]);
+
+  const availableTimes = useMemo(
+    () => freeSlots(date, duration, appointments),
+    [date, duration, appointments],
+  );
+  const availableHours = useMemo(
+    () => Array.from(new Set(availableTimes.map((time) => time.slice(0, 2)))),
+    [availableTimes],
+  );
+  const availableMinutes = useMemo(
+    () =>
+      availableTimes
+        .filter((time) => time.startsWith(`${hour}:`))
+        .map((time) => time.slice(3)),
+    [availableTimes, hour],
+  );
+
+  useEffect(() => {
+    if (loadingTimes || timesError) {
+      setHour("");
+      setMinute("");
+      return;
+    }
+    if (!availableTimes.includes(`${hour}:${minute}`)) {
+      const first = availableTimes[0] ?? "";
+      setHour(first ? first.slice(0, 2) : "");
+      setMinute(first ? first.slice(3) : "");
+    }
+  }, [availableTimes, hour, minute, loadingTimes, timesError]);
 
   useEffect(() => {
     const previousFocus =
@@ -149,6 +252,10 @@ function AppointmentDialogContent({
       return;
     }
     try {
+      if (loadingTimes || timesError)
+        throw new Error("Espera a cargar la disponibilidad antes de agendar.");
+      if (!availableTimes.includes(`${hour}:${minute}`))
+        throw new Error("El horario elegido ya no está disponible.");
       const iso = localDateToISO(toLocalDateTime(date, `${hour}:${minute}`));
       if (new Date(iso).getTime() <= Date.now()) {
         throw new Error(
@@ -156,6 +263,20 @@ function AppointmentDialogContent({
         );
       }
       setSaving(true);
+      const startDay = new Date(`${date}T00:00:00`);
+      const nextDay = new Date(startDay);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const latest = await listAppointments({
+        medico_id: doctorId,
+        desde: startDay.toISOString(),
+        hasta: nextDay.toISOString(),
+      });
+      if (!freeSlots(date, duration, latest).includes(`${hour}:${minute}`)) {
+        setAppointments(latest);
+        throw new Error(
+          "Esa hora acaba de ocuparse. Selecciona otro horario disponible.",
+        );
+      }
       await createAppointment({
         paciente_id: Number(patientId),
         medico_id: doctorId,
@@ -176,6 +297,12 @@ function AppointmentDialogContent({
             ? cause.message
             : "No se pudo agendar la cita.",
         );
+        if (
+          cause instanceof ApiError &&
+          (cause.status === 400 || cause.status === 409)
+        ) {
+          setRefreshTimes((current) => current + 1);
+        }
       }
     } finally {
       setSaving(false);
@@ -253,30 +380,41 @@ function AppointmentDialogContent({
                 Fecha
                 <input
                   required
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="dd/mm/aaaa"
-                  maxLength={10}
+                  type="date"
+                  min={dateKey(new Date())}
                   value={date}
-                  onChange={(event) => setDate(maskDate(event.target.value))}
+                  onChange={(event) => setDate(event.target.value)}
                   className="mt-1 w-full rounded-md border border-border bg-background p-2 text-sm"
-                  aria-label="Fecha en formato día, mes y año"
+                  aria-label="Seleccionar fecha desde el calendario"
                 />
               </label>
               <div className="block text-sm font-medium">
-                <span id="appointment-hour-label">Hora</span>
+                <span>Hora disponible</span>
                 <div className="mt-1 flex items-center gap-2">
                   <select
                     required
                     value={hour}
-                    onChange={(event) => setHour(event.target.value)}
+                    disabled={
+                      loadingTimes ||
+                      !!timesError ||
+                      availableHours.length === 0
+                    }
+                    onChange={(event) => {
+                      const newHour = event.target.value;
+                      setHour(newHour);
+                      setMinute(
+                        availableTimes
+                          .find((time) => time.startsWith(`${newHour}:`))
+                          ?.slice(3) ?? "",
+                      );
+                    }}
                     aria-label="Hora"
                     className="min-w-0 flex-1 rounded-md border border-border bg-background p-2 text-sm"
                   >
-                    {Array.from({ length: 24 }, (_, i) =>
-                      String(i).padStart(2, "0"),
-                    ).map((value) => (
+                    {availableHours.length === 0 && (
+                      <option value="">--</option>
+                    )}
+                    {availableHours.map((value) => (
                       <option key={value} value={value}>
                         {value}
                       </option>
@@ -286,13 +424,19 @@ function AppointmentDialogContent({
                   <select
                     required
                     value={minute}
+                    disabled={
+                      loadingTimes ||
+                      !!timesError ||
+                      availableMinutes.length === 0
+                    }
                     onChange={(event) => setMinute(event.target.value)}
-                    aria-label="Minutos"
+                    aria-label="Minutos disponibles"
                     className="min-w-0 flex-1 rounded-md border border-border bg-background p-2 text-sm"
                   >
-                    {Array.from({ length: 60 }, (_, i) =>
-                      String(i).padStart(2, "0"),
-                    ).map((value) => (
+                    {availableMinutes.length === 0 && (
+                      <option value="">--</option>
+                    )}
+                    {availableMinutes.map((value) => (
                       <option key={value} value={value}>
                         {value}
                       </option>
@@ -301,6 +445,30 @@ function AppointmentDialogContent({
                 </div>
               </div>
             </div>
+            {loadingTimes && (
+              <p className="text-xs text-muted-foreground">
+                Consultando horarios disponibles...
+              </p>
+            )}
+            {timesError && (
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <span>No se pudo consultar la agenda: {timesError}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRefreshTimes((n) => n + 1)}
+                >
+                  Reintentar
+                </Button>
+              </div>
+            )}
+            {!loadingTimes && !timesError && availableTimes.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No quedan horas disponibles para esa fecha y duración entre las
+                08:00 y las 17:00.
+              </p>
+            )}
             <label className="block text-sm font-medium">
               Duración
               <select
@@ -345,7 +513,14 @@ function AppointmentDialogContent({
               </Button>
               <Button
                 type="submit"
-                disabled={saving || !doctorId || patients.length === 0}
+                disabled={
+                  saving ||
+                  loadingTimes ||
+                  !!timesError ||
+                  !doctorId ||
+                  !patientId ||
+                  !availableTimes.includes(`${hour}:${minute}`)
+                }
               >
                 {saving ? "Guardando..." : "Agendar cita"}
               </Button>

@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { Link, createFileRoute } from "@/lib/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, type UserProfile } from "@/services/profile";
@@ -61,16 +62,13 @@ function todayKey(): string {
 }
 
 function formatSelectedDate(key: string): string {
-  const [year, month, day] = key.split("-").map(Number);
-  return new Intl.DateTimeFormat("es-CL", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(year, month - 1, day));
+  const [year,month,day] = key.split("-").map(Number);
+  const weekday = new Intl.DateTimeFormat("es-CL", { weekday: "long" }).format(new Date(year,month-1,day));
+  return `${weekday} ${formatDisplayDate(key)}`;
 }
 
 function DailyCalendar() {
+  useDateStyle();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [agendaLoading, setAgendaLoading] = useState(true);
   const [agendaError, setAgendaError] = useState<string | null>(null);

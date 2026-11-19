@@ -41,5 +41,5 @@ export function Initials({ children }: { children: ReactNode }) { return <span c
 
 /** Tabla con scroll horizontal en pantallas pequeñas. */
 export function DataTable({ head, children, minWidth = 760 }: { head: string[]; children: ReactNode; minWidth?: number }) {
-  return <div className="mt-4 overflow-x-auto"><table style={{ minWidth }} className="w-full text-left text-sm"><thead className="border-b border-border text-[11px] uppercase text-muted-foreground"><tr>{head.map((item, index) => <th key={index} className="pb-3 pr-3 font-semibold">{item}</th>)}</tr></thead><tbody className="divide-y divide-border [&_td]:py-3 [&_td]:pr-3">{children}</tbody></table></div>;
+  return <div className="mt-4 overflow-x-auto"><table style={{ minWidth }} className="arca-data-table w-full text-left text-sm"><thead className="border-b border-border text-[11px] uppercase text-muted-foreground"><tr>{head.map((item, index) => <th key={index} className="pb-3 pr-3 font-semibold">{item}</th>)}</tr></thead><tbody className="divide-y divide-border [&_td]:py-3 [&_td]:pr-3">{children}</tbody></table></div>;
 }

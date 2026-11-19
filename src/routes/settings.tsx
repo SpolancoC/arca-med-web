@@ -1,333 +1,188 @@
 import { createFileRoute, useNavigate } from "@/lib/router";
-import {
-  Bell,
-  Laptop,
-  Lock,
-  Palette,
-  SlidersHorizontal,
-  Smartphone,
-  User,
-} from "lucide-react";
-import { useState } from "react";
-import { toast } from "@/lib/toast";
+import { Lock, Palette, User, RefreshCw, LogOut, PanelLeft, Info, CalendarClock, ListFilter, RotateCcw, ExternalLink, Wifi } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/arca/clinical";
-import {
-  Field,
-  PageHeader,
-  SelectInput,
-  TextInput,
-} from "@/components/arca/ui-kit";
-import { doctorProfile } from "@/lib/arca-data";
+import { PageHeader } from "@/components/arca/ui-kit";
+import { getProfile, type UserProfile } from "@/services/profile";
+import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
+import { useDateStyle, useDensity, setDateStyle, setDensity, type DateStyle, type Density } from "@/lib/display-preferences";
+import { getSidebarPreference, setSidebarPreference, type SidebarPreference } from "@/lib/sidebar-preference";
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({
-    meta: [
-      { title: "Configuración — ARCA Med" },
-      {
-        name: "description",
-        content:
-          "Cuenta, preferencias, notificaciones, seguridad y apariencia de ARCA Med.",
-      },
-      { property: "og:title", content: "Configuración — ARCA Med" },
-      {
-        property: "og:description",
-        content: "Ajustes del espacio clínico de ARCA Med.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Configuración — ARCA Med" }] }),
   component: Settings,
 });
 
 const tabs = [
   { id: "cuenta", label: "Cuenta", icon: User },
-  { id: "preferencias", label: "Preferencias", icon: SlidersHorizontal },
-  { id: "notificaciones", label: "Notificaciones", icon: Bell },
   { id: "seguridad", label: "Seguridad", icon: Lock },
   { id: "apariencia", label: "Apariencia", icon: Palette },
+  { id: "sistema", label: "Sistema", icon: Info },
 ] as const;
-
-export function Toggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div>
-        <p className="text-sm font-semibold">{label}</p>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-muted ring-1 ring-border",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 size-5 rounded-full bg-surface-raised shadow-clinical transition-transform",
-            checked ? "translate-x-[22px]" : "translate-x-0.5",
-          )}
-        />
-      </button>
-    </div>
-  );
-}
+type Tab = (typeof tabs)[number]["id"];
+const options: { value: ThemePreference; title: string; description: string }[] = [
+  { value: "claro", title: "Claro", description: "Utilizar siempre el tema claro" },
+  { value: "oscuro", title: "Oscuro", description: "Utilizar siempre el tema oscuro" },
+  { value: "sistema", title: "Según el sistema", description: "Seguir la configuración del dispositivo" },
+];
 
 function Settings() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("cuenta");
-  const [notif, setNotif] = useState({
-    evaluaciones: true,
-    seguimiento: true,
-    ejercicios: true,
-    alertas: true,
-    correo: false,
-  });
-  const [theme, setTheme] = useState("Claro");
-  const [pwOpen, setPwOpen] = useState(false);
-  const save = () =>
-    toast.success("Cambios guardados", {
-      description: "Tu configuración se actualizó correctamente.",
-    });
+  const [tab, setTab] = useState<Tab>("cuenta");
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
+  const [sidebar, setSidebar] = useState<SidebarPreference>(getSidebarPreference);
+  const dateStyle = useDateStyle();
+  const density = useDensity();
+  const [checking, setChecking] = useState(false);
+  const [connection, setConnection] = useState<"sin-verificar" | "conectado" | "error">("sin-verificar");
+  const [connectionInfo, setConnectionInfo] = useState<string | null>(null);
+  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const version = import.meta.env.VITE_APP_VERSION as string | undefined;
+  const environment = import.meta.env.PROD ? "Producción" : "Desarrollo";
 
-  const password = (
-    <div className="mt-4 rounded-md border border-border p-4">
-      {pwOpen ? (
-        <form
-          className="grid gap-3 sm:grid-cols-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setPwOpen(false);
-            toast.success("Contraseña actualizada");
-          }}
-        >
-          <Field label="Contraseña actual">
-            <TextInput type="password" required />
-          </Field>
-          <Field label="Nueva contraseña">
-            <TextInput type="password" required minLength={8} />
-          </Field>
-          <Field label="Confirmar contraseña">
-            <TextInput type="password" required minLength={8} />
-          </Field>
-          <div className="flex gap-2 sm:col-span-3">
-            <Button type="submit" size="sm">
-              Actualizar contraseña
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setPwOpen(false)}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">Contraseña</p>
-            <p className="text-xs text-muted-foreground">
-              •••••••• · actualizada hace 3 meses
-            </p>
-          </div>
-          <Button size="sm" variant="secondary" onClick={() => setPwOpen(true)}>
-            Cambiar contraseña
-          </Button>
-        </div>
-      )}
-    </div>
-  );
+  const verifyConnection = async () => {
+    setChecking(true);
+    setConnectionInfo(null);
+    try {
+      await getProfile();
+      setConnection("conectado");
+    } catch {
+      setConnection("error");
+      setConnectionInfo("No se pudo verificar la conexión autenticada. Comprueba la sesión o la disponibilidad de la API.");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const resetPreferences = () => {
+    setTheme("claro");
+    setSidebar("expandido");
+    setThemePreference("claro");
+    setSidebarPreference("expandido");
+    setDateStyle("dd/mm/aaaa");
+    setDensity("normal");
+  };
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setProfile(await getProfile());
+    } catch (err) {
+      setProfile(null);
+      setError(err instanceof Error ? err.message : "No se pudo cargar el perfil.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const logout = () => {
+    localStorage.removeItem("arca-med-token");
+    localStorage.removeItem("arca-med-role");
+    void navigate({ to: "/login", replace: true });
+  };
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Espacio clínico"
-        title="Configuración"
-        description="Administra tu cuenta y las preferencias de la aplicación."
-        action={<Button onClick={save}>Guardar cambios</Button>}
-      />
+      <PageHeader eyebrow="Espacio clínico" title="Configuración" description="Consulta tu cuenta, administra tu sesión y personaliza la apariencia." />
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav
-          aria-label="Secciones de configuración"
-          className="flex gap-1 overflow-x-auto lg:flex-col"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "flex min-h-9 shrink-0 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-                tab === t.id && "bg-primary-soft font-semibold text-primary",
-              )}
-            >
-              <t.icon className="size-4" />
-              {t.label}
+        <nav aria-label="Secciones de configuración" className="flex gap-1 overflow-x-auto lg:flex-col">
+          {tabs.map((item) => (
+            <button key={item.id} type="button" aria-current={tab === item.id ? "page" : undefined} onClick={() => setTab(item.id)} className={cn("flex min-h-9 shrink-0 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", tab === item.id && "bg-primary-soft font-semibold text-primary")}>
+              <item.icon className="size-4" />{item.label}
             </button>
           ))}
         </nav>
         <div>
           {tab === "cuenta" && (
-            <Section
-              title="Cuenta"
-              description="Datos de identificación de tu usuario."
-            >
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="Nombre">
-                  <TextInput defaultValue={doctorProfile.name} />
-                </Field>
-                <Field label="Correo">
-                  <TextInput type="email" defaultValue={doctorProfile.email} />
-                </Field>
-              </div>
-              {password}
-            </Section>
-          )}
-          {tab === "preferencias" && (
-            <Section title="Preferencias">
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="Idioma">
-                  <SelectInput options={["Español", "English"]} />
-                </Field>
-                <Field label="Formato de fecha">
-                  <SelectInput
-                    options={["DD/MM/AAAA", "MM/DD/AAAA", "AAAA-MM-DD"]}
-                  />
-                </Field>
-              </div>
-              <div className="mt-2 divide-y divide-border">
-                <Toggle
-                  label="Notificaciones"
-                  description="Recibir avisos dentro de la aplicación."
-                  checked={notif.correo}
-                  onChange={(v) => setNotif({ ...notif, correo: v })}
-                />
-              </div>
-            </Section>
-          )}
-          {tab === "notificaciones" && (
-            <Section
-              title="Notificaciones"
-              description="Elige qué avisos quieres recibir."
-            >
-              <div className="mt-2 divide-y divide-border">
-                <Toggle
-                  label="Nuevas evaluaciones"
-                  description="Cuando un paciente complete una evaluación."
-                  checked={notif.evaluaciones}
-                  onChange={(v) => setNotif({ ...notif, evaluaciones: v })}
-                />
-                <Toggle
-                  label="Recordatorios de seguimiento"
-                  description="Controles programados de tus pacientes."
-                  checked={notif.seguimiento}
-                  onChange={(v) => setNotif({ ...notif, seguimiento: v })}
-                />
-                <Toggle
-                  label="Revisiones de ejercicios"
-                  description="Ejercicios que requieren tu revisión."
-                  checked={notif.ejercicios}
-                  onChange={(v) => setNotif({ ...notif, ejercicios: v })}
-                />
-                <Toggle
-                  label="Alertas clínicas"
-                  description="Cambios de prioridad en el triaje."
-                  checked={notif.alertas}
-                  onChange={(v) => setNotif({ ...notif, alertas: v })}
-                />
-              </div>
-            </Section>
-          )}
-          {tab === "seguridad" && (
-            <Section title="Seguridad">
-              {password}
-              <h3 className="mt-5 text-sm font-semibold">Sesiones activas</h3>
-              <ul className="mt-2 divide-y divide-border rounded-md border border-border">
-                {[
-                  {
-                    icon: Laptop,
-                    name: "Chrome · Santiago",
-                    when: "Sesión actual",
-                  },
-                  {
-                    icon: Smartphone,
-                    name: "iPhone · Santiago",
-                    when: "Hace 2 días",
-                  },
-                ].map((s) => (
-                  <li
-                    key={s.name}
-                    className="flex items-center gap-3 p-3 text-sm"
-                  >
-                    <s.icon className="size-4 text-muted-foreground" />
-                    <span className="flex-1 font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {s.when}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                variant="destructive"
-                className="mt-5"
-                onClick={() => {
-                  localStorage.removeItem("arca-med-token");
-                  localStorage.removeItem("arca-med-role");
-
-                  navigate({
-                    to: "/login",
-                    replace: true,
-                  });
-                }}
-              >
-                Cerrar sesión
+            <Section title="Cuenta" description="Información real obtenida de tu sesión en ARCA Med. Los datos se muestran en modo lectura porque la API no permite editarlos desde aquí.">
+              {loading ? <p className="mt-4 text-sm text-muted-foreground">Cargando tu perfil...</p> : error ? (
+                <div className="mt-4 space-y-3" role="alert">
+                  <p className="text-sm text-destructive">{error}</p>
+                  <Button size="sm" variant="secondary" onClick={() => void load()}><RefreshCw className="size-4" /> Reintentar</Button>
+                </div>
+              ) : (
+                <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-md border border-border p-4"><dt className="text-xs text-muted-foreground">Nombre</dt><dd className="mt-1 text-sm font-semibold">{profile?.nombre || "No disponible"}</dd></div>
+                  <div className="rounded-md border border-border p-4"><dt className="text-xs text-muted-foreground">Rol</dt><dd className="mt-1 text-sm font-semibold">{profile?.rol === "admin" ? "Administrador" : profile?.rol === "medico" ? "Médico" : profile?.rol === "paciente" ? "Paciente" : profile?.rol || "No disponible"}</dd></div>
+                </dl>
+              )}
+              <Button variant="secondary" className="mt-4" onClick={() => void navigate({ to: "/profile" })}>
+                <ExternalLink className="size-4" /> Ver mi perfil
               </Button>
             </Section>
           )}
+          {tab === "seguridad" && (
+            <Section title="Seguridad" description="Controla tu sesión actual.">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-4">
+                <div><p className="text-sm font-semibold">Cerrar sesión</p><p className="text-xs text-muted-foreground">Finaliza tu sesión en este navegador. Para cambiar tu contraseña debes contactar a un administrador autorizado.</p></div>
+                <Button variant="destructive" onClick={logout}><LogOut className="size-4" /> Cerrar sesión</Button>
+              </div>
+            </Section>
+          )}
           {tab === "apariencia" && (
-            <Section title="Apariencia">
+            <Section title="Apariencia" description="El tema se aplica inmediatamente en la aplicación y se conserva en este navegador.">
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {["Claro", "Oscuro", "Según el sistema"].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTheme(t)}
-                    className={cn(
-                      "rounded-md border border-border p-4 text-left text-sm font-semibold",
-                      theme === t &&
-                        "border-primary bg-primary-soft text-primary",
-                    )}
-                  >
-                    {t}
-                    <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                      Tema de la aplicación
-                    </span>
+                {options.map((option) => (
+                  <button key={option.value} type="button" aria-pressed={theme === option.value} onClick={() => { setTheme(option.value); setThemePreference(option.value); }} className={cn("rounded-md border border-border p-4 text-left text-sm font-semibold transition-colors hover:bg-muted", theme === option.value && "border-primary bg-primary-soft text-primary")}>
+                    {option.title}<span className="mt-1 block text-xs font-normal text-muted-foreground">{option.description}</span>
                   </button>
                 ))}
               </div>
-              <Field label="Preferencia visual" className="mt-4 max-w-sm">
-                <SelectInput
-                  options={["Estándar", "Compacta", "Alto contraste"]}
-                />
-              </Field>
+              <div className="mt-5 space-y-4 rounded-md border border-border p-4">
+                <div className="flex items-center gap-2"><PanelLeft className="size-4 text-muted-foreground" /><p className="text-sm font-semibold">Menú lateral al iniciar</p></div>
+                <p className="text-xs text-muted-foreground">Define cómo se muestra el menú en pantallas grandes. En móvil se mantiene el menú adaptable.</p>
+                <div className="flex flex-wrap gap-2">
+                  {(["expandido", "contraido"] as SidebarPreference[]).map((value) => (
+                    <Button key={value} variant={sidebar === value ? "primary" : "outline"} aria-pressed={sidebar === value} onClick={() => { setSidebar(value); setSidebarPreference(value); }}>
+                      {value === "expandido" ? "Expandido" : "Contraído"}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-5 space-y-3 rounded-md border border-border p-4">
+                <div className="flex items-center gap-2"><CalendarClock className="size-4 text-muted-foreground" /><p className="text-sm font-semibold">Formato de fecha y hora</p></div>
+                <p className="text-xs text-muted-foreground">Cambia las fechas visibles en el portal. Las horas siguen en formato de 24 horas y las fechas que se envían a la API no se modifican.</p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Formato de fecha">
+                  {(["dd/mm/aaaa", "aaaa-mm-dd"] as DateStyle[]).map((value) => (
+                    <Button key={value} type="button" variant={dateStyle === value ? "primary" : "outline"} aria-pressed={dateStyle === value} onClick={() => setDateStyle(value)}>{value}</Button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-5 space-y-3 rounded-md border border-border p-4">
+                <div className="flex items-center gap-2"><ListFilter className="size-4 text-muted-foreground" /><p className="text-sm font-semibold">Densidad de la interfaz</p></div>
+                <p className="text-xs text-muted-foreground">Reduce el espacio de tarjetas, tablas, formularios y listas sin ocultar información.</p>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Densidad visual">
+                  {(["normal", "compacta"] as Density[]).map((value) => (
+                    <Button key={value} type="button" variant={density === value ? "primary" : "outline"} aria-pressed={density === value} onClick={() => setDensity(value)}>{value === "normal" ? "Normal" : "Compacta"}</Button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-4">
+                <div><p className="text-sm font-semibold">Restablecer preferencias visuales</p><p className="text-xs text-muted-foreground">Devuelve el tema a Claro, el menú a Expandido, la fecha a dd/mm/aaaa y la densidad a Normal. No afecta tu sesión ni los datos clínicos.</p></div>
+                <Button variant="secondary" onClick={resetPreferences}><RotateCcw className="size-4" /> Restablecer</Button>
+              </div>
+            </Section>
+          )}
+          {tab === "sistema" && (
+            <Section title="Información del sistema" description="Datos del frontend y verificación de conexión a la API con tu sesión actual.">
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-md border border-border p-4"><dt className="text-xs text-muted-foreground">Entorno</dt><dd className="mt-1 text-sm font-semibold">{environment}</dd></div>
+                <div className="rounded-md border border-border p-4"><dt className="text-xs text-muted-foreground">Versión del frontend</dt><dd className="mt-1 text-sm font-semibold">{version || "No configurada"}</dd></div>
+                <div className="rounded-md border border-border p-4 sm:col-span-2"><dt className="text-xs text-muted-foreground">API configurada</dt><dd className="mt-1 break-all text-sm font-semibold">{apiUrl || "No configurada"}</dd></div>
+                <div className="rounded-md border border-border p-4 sm:col-span-2"><dt className="text-xs text-muted-foreground">Estado de conexión autenticada</dt><dd className="mt-1 text-sm font-semibold">{connection === "conectado" ? "Conectada" : connection === "error" ? "No se pudo verificar" : "Sin verificar"}</dd></div>
+              </dl>
+              {connectionInfo && <p className="mt-3 text-sm text-destructive" role="alert">{connectionInfo}</p>}
+              <Button className="mt-4" variant="secondary" disabled={checking} onClick={() => void verifyConnection()}>
+                {checking ? <RefreshCw className="size-4 animate-spin" /> : <Wifi className="size-4" />}
+                {checking ? "Comprobando..." : "Comprobar conexión"}
+              </Button>
             </Section>
           )}
         </div>

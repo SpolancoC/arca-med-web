@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { normalizeSearch } from "@/lib/search-normalization";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createFileRoute } from "@/lib/router";
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/guias-clinicas")({
 });
 
 function ClinicalGuidesPage() {
+  useDateStyle();
   const [guides, setGuides] = useState<ClinicalGuide[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -110,7 +112,7 @@ function ClinicalGuidesPage() {
           {selected ? <>
             <p className="text-xs font-semibold uppercase text-accent">Guía clínica #{selected.id}</p>
             <h2 className="mt-1 font-display text-xl font-semibold break-words">{selected.titulo}</h2>
-            <p className="mt-2 text-xs text-muted-foreground">Creada: {new Date(selected.creado_en).toLocaleDateString("es-CL")}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Creada: {formatDisplayDate(selected.creado_en)}</p>
             <div className="mt-5 whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{selected.contenido}</div>
           </> : <div className="grid min-h-52 place-items-center text-center text-sm text-muted-foreground">
             Selecciona una guía para leer su contenido.

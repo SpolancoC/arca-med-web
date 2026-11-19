@@ -155,8 +155,8 @@
   --secondary-foreground: oklch(0.984 0.003 247.858);
   --muted: oklch(0.279 0.041 260.031);
   --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
+  --accent: oklch(0.76 0.115 173);
+  --accent-foreground: oklch(0.18 0.035 260);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(1 0 0 / 10%);
@@ -175,6 +175,28 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+  /* Tokens propios de ARCA Med: antes faltaban en el modo oscuro. */
+  --surface-raised: oklch(0.245 0.033 264);
+  --surface-glass: oklch(0.185 0.035 264 / 94%);
+  --primary-soft: oklch(0.305 0.055 239);
+  --accent-soft: oklch(0.285 0.042 175);
+  --overlay: oklch(0.08 0.01 260 / 68%);
+  --priority-high: oklch(0.34 0.09 27);
+  --priority-high-foreground: oklch(0.91 0.07 27);
+  --priority-high-border: oklch(0.5 0.105 27);
+  --priority-medium: oklch(0.36 0.07 82);
+  --priority-medium-foreground: oklch(0.95 0.07 85);
+  --priority-medium-border: oklch(0.51 0.08 80);
+  --priority-low: oklch(0.3 0.055 160);
+  --priority-low-foreground: oklch(0.88 0.08 158);
+  --priority-low-border: oklch(0.43 0.065 157);
+  --ai: oklch(0.84 0.07 290);
+  --ai-soft: oklch(0.3 0.04 290);
+  --ai-border: oklch(0.45 0.05 290);
+  --info: oklch(0.82 0.07 225);
+  --info-soft: oklch(0.29 0.04 225);
+  --info-border: oklch(0.43 0.05 225);
+  --chart-grid: oklch(0.35 0.025 260);
 }
 
 @layer base {
@@ -213,4 +235,23 @@
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* Menús y controles nativos legibles en tema oscuro. */
+.dark input, .dark textarea, .dark select { color-scheme: dark; }
+.dark select option { background-color: var(--surface-raised); color: var(--foreground); }
+.dark header { color: var(--foreground); }
+
+/* Densidad compacta: presentada solo en escritorios/tablets para no estrechar áreas táctiles en móvil. */
+@media (min-width: 768px) {
+  :root[data-density="compacta"] .arca-section { padding: 0.85rem; }
+  :root[data-density="compacta"] .arca-stat-card { padding: 0.8rem; }
+  :root[data-density="compacta"] .arca-data-table td { padding-top: 0.42rem; padding-bottom: 0.42rem; }
+  :root[data-density="compacta"] .arca-data-table th { padding-bottom: 0.45rem; }
+  :root[data-density="compacta"] :is(table:not(.arca-data-table)) :is(td,th) { padding-top: 0.45rem; padding-bottom: 0.45rem; }
+  :root[data-density="compacta"] main :is(.p-6,.p-5) { padding: 1rem; }
+  :root[data-density="compacta"] main .p-4 { padding: 0.75rem; }
+  :root[data-density="compacta"] main :is(.gap-5,.gap-6) { gap: 0.8rem; }
+  :root[data-density="compacta"] main :is(.space-y-5,.space-y-6) > :not([hidden]) ~ :not([hidden]) { margin-top: 0.8rem; }
+  :root[data-density="compacta"] main :is(input, select, textarea) { padding-top: 0.4rem; padding-bottom: 0.4rem; }
 }

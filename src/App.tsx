@@ -66,8 +66,6 @@ function allowedPath(pathname: string, role: PortalRole): boolean {
     pathname === "/agenda" ||
     pathname === "/patients" ||
     pathname === "/triage" ||
-    pathname === "/evaluations" ||
-    pathname.startsWith("/evaluations/") ||
     pathname === "/history" ||
     pathname.startsWith("/dashboard/") ||
     /^\/patients\/[^/]+(?:\/(?:history|recommend))?\/?$/.test(pathname)

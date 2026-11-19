@@ -1,3 +1,4 @@
+import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@/lib/router";
 import { FileText, Activity, AlertCircle } from "lucide-react";
@@ -33,15 +34,10 @@ function mapPriority(value: string): Priority | null {
   }
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime())
-    ? "Fecha no disponible"
-    : date.toLocaleDateString("es-CL");
-}
+function formatDate(value: string): string { return formatDisplayDate(value); }
 
 function PatientDetailPage() {
+  useDateStyle();
   const { patientId } = Route.useParams();
   const id = Number(patientId);
 

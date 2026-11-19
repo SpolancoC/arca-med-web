@@ -26,7 +26,6 @@ const pages = {
     { title: "Panel principal", to: "/" },
     { title: "Pacientes", to: "/patients" },
     { title: "Triaje", to: "/triage" },
-    { title: "Evaluaciones", to: "/evaluations" },
     { title: "Historial", to: "/history" },
     { title: "Mi agenda", to: "/agenda" },
     { title: "Guías clínicas", to: "/guias-clinicas" },

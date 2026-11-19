@@ -111,8 +111,8 @@ function LoginPage() {
     <main className="grid min-h-screen place-items-center bg-background px-4 py-10 text-foreground">
       <div className="w-full max-w-md">
         <div className="mb-7 flex items-center justify-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-primary font-display text-lg font-semibold text-primary-foreground">
-            A
+          <div className="grid size-11 place-items-center rounded-md bg-white p-1.5 shadow-sm" aria-hidden="true">
+            <img src="/arca-logo.svg" alt="" className="size-full object-contain" />
           </div>
           <div className="leading-tight">
             <p className="font-display text-xl font-semibold">ARCA Med</p>
