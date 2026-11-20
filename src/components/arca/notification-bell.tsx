@@ -301,9 +301,23 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
                   const Icon = iconFor(notice.kind);
                   const isUnread = !read.includes(notice.id);
                   return (
-                    <button key={notice.id} type="button" onClick={() => {
-                      markRead([notice.id]); setOpen(false); void navigate({ to: notice.destination });
-                    }} className="flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted last:border-0">
+                    <button
+                      key={notice.id}
+                      type="button"
+                      onMouseEnter={() => {
+                        if (isUnread) markRead([notice.id]);
+                      }}
+                      onFocus={() => {
+                        if (isUnread) markRead([notice.id]);
+                      }}
+                      onClick={() => {
+                        // El clic conserva la navegación; ya no hace falta para marcar leído.
+                        markRead([notice.id]);
+                        setOpen(false);
+                        void navigate({ to: notice.destination });
+                      }}
+                      className="flex w-full items-start gap-3 border-b border-border px-4 py-3 text-left hover:bg-muted last:border-0"
+                    >
                       <Icon className="mt-1 size-4 shrink-0 text-primary" />
                       <span className="min-w-0 flex-1">
                         <span className={`block text-sm ${isUnread ? "font-semibold" : "font-medium"}`}>{notice.title}</span>

@@ -1,6 +1,6 @@
 import { normalizeSearch } from "@/lib/search-normalization";
 import { Link, createFileRoute } from "@/lib/router";
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, ImageOff, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -162,8 +162,9 @@ function ExerciseLibrary() {
                     {exercise.articulacion}
                   </span>
 
-                  <h2 className="mt-1 text-base font-semibold">
-                    {exercise.nombre_ejercicio}
+                  <h2 className="mt-1 flex items-baseline gap-2 text-base font-semibold">
+                    <span className="shrink-0 text-sm font-medium text-muted-foreground">#{exercise.id}</span>
+                    <span>{exercise.nombre_ejercicio}</span>
                   </h2>
                 </div>
               </div>
@@ -172,10 +173,24 @@ function ExerciseLibrary() {
                 {exercise.descripcion || "Sin descripción disponible."}
               </p>
 
-              <div className="mt-4 rounded-md bg-muted p-2">
-                <p className="text-xs text-muted-foreground">Identificador</p>
-
-                <p className="mt-0.5 text-sm font-semibold">#{exercise.id}</p>
+              <div className="mt-4 flex min-h-44 items-center justify-center rounded-md border border-border bg-muted/60 p-3">
+                {exercise.imagen_url ? (
+                  <img
+                    src={
+                      exercise.imagen_url.startsWith("http")
+                        ? exercise.imagen_url
+                        : `${(import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")}/${exercise.imagen_url.replace(/^\//, "")}`
+                    }
+                    alt={`Vista previa de ${exercise.nombre_ejercicio}`}
+                    loading="lazy"
+                    className="block h-auto max-h-56 w-auto max-w-full object-contain"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <ImageOff className="size-7" aria-hidden="true" />
+                    <span className="text-xs">Imagen no disponible</span>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex gap-2 border-t border-border pt-3">

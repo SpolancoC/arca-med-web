@@ -24,7 +24,7 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-type QuickRole = "admin" | "soporte" | "medico";
+type QuickRole = "medico";
 type QuickCredentials = { email: string; password: string };
 
 // Vite solo inyecta estos datos al iniciar el servidor de desarrollo.
@@ -37,6 +37,7 @@ const canUseQuickAccess =
   ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
 const QUICK_ACCESS = canUseQuickAccess ? __ARCA_DEV_QUICK_ACCESS__ : null;
+const ADMIN_EMAIL = "admin@arcamed.com";
 
 function LoginPage() {
   const navigate = useNavigate({ from: "/login" });
@@ -180,21 +181,30 @@ function LoginPage() {
                 </Button>
               </span>
             </label>
-            {QUICK_ACCESS && (
-              <div className="grid grid-cols-3 gap-2">
-                {(["admin", "soporte", "medico"] as const).map((role) => (
-                  <Button
-                    key={role}
-                    type="button"
-                    variant="outline"
-                    onClick={() => void quickLogin(role)}
-                    disabled={loading || !QUICK_ACCESS[role]?.password}
-                  >
-                    {role === "admin" ? "Admin" : role === "soporte" ? "Soporte" : "Médico"}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEmail(ADMIN_EMAIL);
+                  setPassword("");
+                  setError("");
+                }}
+                disabled={loading}
+              >
+                Admin
+              </Button>
+              {QUICK_ACCESS?.medico?.email && QUICK_ACCESS.medico.password && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void quickLogin("medico")}
+                  disabled={loading}
+                >
+                  Médico
+                </Button>
+              )}
+            </div>
 
             <div className="flex justify-end">
               <Link

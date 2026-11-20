@@ -4,27 +4,18 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ command, mode }) => {
-  // Solo el servidor local de desarrollo recibe credenciales de prueba.
-  // No se incorporan al bundle creado con npm run build.
-  const env =
-    command === "serve" ? loadEnv(mode, process.cwd(), "ARCA_QUICK_") : {};
-  const quickCredentials =
-    command === "serve"
-      ? {
-          admin: {
-            email: env.ARCA_QUICK_ADMIN_EMAIL || "",
-            password: env.ARCA_QUICK_ADMIN_PASSWORD || "",
-          },
-          soporte: {
-            email: env.ARCA_QUICK_SOPORTE_EMAIL || "",
-            password: env.ARCA_QUICK_SOPORTE_PASSWORD || "",
-          },
-          medico: {
-            email: env.ARCA_QUICK_MEDICO_EMAIL || "",
-            password: env.ARCA_QUICK_MEDICO_PASSWORD || "",
-          },
-        }
-      : null;
+  // El acceso rápido médico se habilita solo en desarrollo local.
+  // ADVERTENCIA: las credenciales siguen siendo visibles para el navegador
+  // de desarrollo; usar exclusivamente cuentas de prueba, nunca producción.
+  const env = command === "serve" ? loadEnv(mode, process.cwd(), "ARCA_QUICK_") : {};
+  const quickCredentials = command === "serve"
+    ? {
+        medico: {
+          email: env.ARCA_QUICK_MEDICO_EMAIL || "",
+          password: env.ARCA_QUICK_MEDICO_PASSWORD || "",
+        },
+      }
+    : null;
 
   return {
     plugins: [react(), tailwindcss(), tsconfigPaths()],

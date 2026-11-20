@@ -145,98 +145,64 @@ function ExerciseDetail() {
 
   const precautions = sections
     .filter((line) => line.toLowerCase().startsWith("precaución:"))
-    .map((line) => line.replace(/^precaución:\s*/i, ""));
-
-  const info = [
-    ["ID del ejercicio", String(exercise.id)],
-    ["Articulación", exercise.articulacion],
-  ];
+    .map((line) => line.replace(/^precaución:\s*/i, ""))
+    .map((text) => text.replace(/^\p{L}/u, (first) => first.toLocaleUpperCase("es-CL")));
 
   return (
     <div className="space-y-5">
       <PageHeader
         back={<BackButton to="/exercises">Volver a la biblioteca</BackButton>}
-        eyebrow="Revisar ejercicio"
+        eyebrow={`Ejercicio #${exercise.id}`}
         title={exercise.nombre_ejercicio}
         description={`Ejercicio de rehabilitación para ${exercise.articulacion}.`}
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <Section
-          title="Imagen del ejercicio"
-          description="Referencia visual de la ejecución."
-        >
-          <div className="mt-4 grid aspect-video place-items-center overflow-hidden rounded-md border border-border bg-muted">
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <Section title="Imagen del ejercicio" description="Referencia visual de la ejecución.">
+          <div className="mt-4 flex min-h-52 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/50 p-2 sm:min-h-64">
             {exercise.imagen_url ? (
               <img
                 src={
                   exercise.imagen_url.startsWith("http")
                     ? exercise.imagen_url
-                    : `${import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"}${exercise.imagen_url}`
+                    : `${(import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "")}/${exercise.imagen_url.replace(/^\//, "")}`
                 }
                 alt={exercise.nombre_ejercicio}
-                className="h-full w-full object-contain"
+                className="block h-auto max-h-[70vh] w-auto max-w-full object-contain"
               />
             ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <ImageOff className="size-10" />
-
+              <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <ImageOff className="size-10" aria-hidden="true" />
                 <p className="text-sm">Imagen no disponible</p>
               </div>
             )}
           </div>
 
-          <div className="mt-4 space-y-3">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                {exercise.imagen_url ? "Reemplazar imagen" : "Agregar imagen"}
-              </span>
-
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className={`inline-flex cursor-pointer items-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring ${uploading ? "pointer-events-none opacity-50" : ""}`}>
               <input
                 type="file"
                 accept="image/*"
+                aria-label="Seleccionar imagen del ejercicio"
                 disabled={uploading}
                 onChange={handleImageUpload}
-                className="block w-full rounded-md border border-border bg-card p-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-soft file:px-3 file:py-2 file:text-primary"
+                className="sr-only"
               />
+              {exercise.imagen_url ? "Cambiar imagen" : "Seleccionar imagen"}
             </label>
-
-            {uploading && (
-              <p className="text-sm text-muted-foreground">
-                Subiendo imagen...
-              </p>
-            )}
-
-            {uploadSuccess && (
-              <p role="status" className="text-sm text-green-600">
-                Imagen subida correctamente.
-              </p>
-            )}
-
-            {uploadError && (
-              <p role="alert" className="text-sm text-destructive">
-                {uploadError}
-              </p>
-            )}
+            <span className="text-xs text-muted-foreground">JPG, PNG u otra imagen compatible</span>
           </div>
+          {uploading && (
+            <p role="status" className="mt-2 text-sm text-muted-foreground">Subiendo imagen...</p>
+          )}
+          {uploadSuccess && (
+            <p role="status" className="mt-2 text-sm text-green-600">Imagen subida correctamente.</p>
+          )}
+          {uploadError && (
+            <p role="alert" className="mt-2 text-sm text-destructive">{uploadError}</p>
+          )}
         </Section>
 
-        <Section title="Información del ejercicio">
-          <dl className="mt-4 grid grid-cols-2 gap-2">
-            {info.map(([label, value]) => (
-              <div key={label} className="rounded-md bg-muted p-2.5">
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-
-                <dd className="mt-0.5 text-sm font-semibold capitalize">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Section>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Instrucciones">
           {instructions.length > 0 ? (
             <ol className="mt-4 space-y-3">
@@ -245,39 +211,30 @@ function ExerciseDetail() {
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
                     {index + 1}
                   </span>
-
                   <span className="leading-relaxed">{step}</span>
                 </li>
               ))}
             </ol>
           ) : (
-            <p className="mt-4 text-sm text-muted-foreground">
-              No hay instrucciones disponibles.
-            </p>
-          )}
-        </Section>
-
-        <Section
-          title="Consideraciones clínicas"
-          description="Recomendaciones y precauciones para el profesional."
-        >
-          {precautions.length > 0 ? (
-            <ul className="mt-4 space-y-3">
-              {precautions.map((precaution, index) => (
-                <li key={index} className="flex gap-2.5 text-sm">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-priority-high-foreground" />
-
-                  <span className="leading-relaxed">{precaution}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm text-muted-foreground">
-              No hay precauciones registradas.
-            </p>
+            <p className="mt-4 text-sm text-muted-foreground">No hay instrucciones disponibles.</p>
           )}
         </Section>
       </div>
+
+      <Section title="Consideraciones clínicas" description="Recomendaciones y precauciones para el profesional.">
+        {precautions.length > 0 ? (
+          <ul className="mt-4 space-y-3">
+            {precautions.map((precaution, index) => (
+              <li key={index} className="flex gap-2.5 text-sm">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-priority-high-foreground" />
+                <span className="leading-relaxed">{precaution}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">No hay precauciones registradas.</p>
+        )}
+      </Section>
     </div>
   );
 }
