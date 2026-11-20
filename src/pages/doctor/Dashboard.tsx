@@ -3,7 +3,7 @@ import { Link, createFileRoute } from "@/lib/router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, type UserProfile } from "@/services/profile";
 import { getTriagePatients, type TriagePatient } from "@/services/triage";
-import { listAppointments, isSameLocalDay, appointmentDate, type Appointment } from "@/services/appointments";
+import { listAppointments, isSameLocalDay, dateTimeLocalValue, appointmentDate, type Appointment } from "@/services/appointments";
 import {
   Activity,
   AlertCircle,
@@ -91,6 +91,12 @@ function DailyCalendar() {
   });
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const dayAppointments = appointments.filter(item=>isSameLocalDay(item.fecha_hora,selectedDate));
+  // Fechas con citas reales (las canceladas no bloquean la agenda).
+  const datesWithAppointments = useMemo(() => new Set(
+    appointments
+      .filter((item) => item.estado !== "cancelada")
+      .map((item) => dateTimeLocalValue(item.fecha_hora).slice(0, 10)),
+  ), [appointments]);
 
 
   const year = visibleMonth.getFullYear();
@@ -167,6 +173,7 @@ function DailyCalendar() {
               if (!day) return <div key={`empty-${index}`} />;
               const key = dateKey(year, month, day);
               const selected = key === selectedDate;
+              const hasAppointments = !agendaError && datesWithAppointments.has(key);
               return (
                 <button
                   key={key}
@@ -177,10 +184,16 @@ function DailyCalendar() {
                       ? "bg-primary font-semibold text-primary-foreground"
                       : "hover:bg-muted"
                   }`}
-                  aria-label={`Seleccionar ${day} de ${monthNames[month]}`}
+                  aria-label={`Seleccionar ${day} de ${monthNames[month]}${hasAppointments ? ", con citas" : ""}`}
                   aria-pressed={selected}
                 >
                   {day}
+                  {hasAppointments && (
+                    <span
+                      aria-hidden="true"
+                      className={`absolute bottom-1 left-1/2 size-1.5 -translate-x-1/2 rounded-full ${selected ? "bg-primary-foreground" : "bg-primary"}`}
+                    />
+                  )}
                 </button>
               );
             })}

@@ -73,6 +73,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // En móvil el menú es un panel superpuesto: bloquear el scroll de fondo
+  // también en Safari/iOS, y restaurar la posición al cerrarlo.
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    const previous = {
+      htmlOverflow: document.documentElement.style.overflow,
+      bodyOverflow: document.body.style.overflow,
+      bodyPosition: document.body.style.position,
+      bodyTop: document.body.style.top,
+      bodyWidth: document.body.style.width,
+    };
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      document.documentElement.style.overflow = previous.htmlOverflow;
+      document.body.style.overflow = previous.bodyOverflow;
+      document.body.style.position = previous.bodyPosition;
+      document.body.style.top = previous.bodyTop;
+      document.body.style.width = previous.bodyWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -90,6 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     select: (state) => state.location.pathname,
   });
   const navigate = useNavigate();
+  useEffect(() => setOpen(false), [pathname]);
   const currentNav =
     profile?.rol === "admin"
       ? adminNav
@@ -104,17 +137,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (pathname === "/login") return children;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh min-w-0 bg-background text-foreground">
       {open && (
         <button
           aria-label="Cerrar navegación"
-          className="fixed inset-0 z-30 bg-overlay lg:hidden"
+          className="fixed inset-0 z-30 touch-none bg-overlay lg:hidden"
           onClick={() => setOpen(false)}
         />
       )}
       <aside
+        id="arca-mobile-navigation"
+        aria-label="Menú principal"
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col border-r border-border bg-sidebar/90 px-4 py-5 backdrop-blur-xl transition-transform duration-200 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-[min(280px,85vw)] flex-col overflow-y-auto overscroll-contain border-r border-border bg-sidebar px-4 py-5 shadow-xl transition-transform duration-200 lg:h-screen lg:w-[248px] lg:overflow-y-auto lg:bg-sidebar/90 lg:shadow-none lg:backdrop-blur-xl lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
           collapsed && "lg:w-[76px]",
         )}
@@ -133,8 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="grid size-9 shrink-0 place-items-center rounded-md bg-white p-1 shadow-sm" aria-hidden="true">
               <img src="/arca-logo.svg" alt="" className="size-full object-contain" />
             </div>
-            {!collapsed && (
-              <div className="min-w-0 leading-tight">
+            <div className={cn("min-w-0 leading-tight", collapsed && "lg:hidden")}>
                 <p className="truncate font-display text-base font-semibold">
                   ARCA Med
                 </p>
@@ -142,7 +176,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Evaluación Articular
                 </p>
               </div>
-            )}
           </Link>
           <Button
             variant="ghost"
@@ -155,11 +188,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
         </div>
         <nav className="mt-8 flex flex-col gap-1">
-          {!collapsed && (
-            <span className="mb-1 px-2 text-[10px] font-semibold uppercase text-muted-foreground">
-              Espacio de trabajo
-            </span>
-          )}
+          <span className={cn("mb-1 px-2 text-[10px] font-semibold uppercase text-muted-foreground", collapsed && "lg:hidden")}>
+            Espacio de trabajo
+          </span>
           {currentNav.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
@@ -176,7 +207,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
               >
                 <item.icon className="size-4 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
+                <span className={cn("min-w-0", collapsed && "lg:hidden")}>{item.label}</span>
               </Link>
             );
           })}
@@ -198,7 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <item.icon className="size-4 shrink-0" />
-              {!collapsed && item.label}
+              <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
             </Link>
           ))}
           <div className="mt-2 flex items-center gap-2.5 rounded-md bg-surface-raised/70 p-2">
@@ -216,8 +247,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   .join("")
                   .toUpperCase() ?? "--"}
               </div>
-              {!collapsed && (
-                <div className="min-w-0 flex-1">
+              <div className={cn("min-w-0 flex-1", collapsed && "lg:hidden")}>
                   <p className="truncate text-xs font-semibold">
                     {profile?.nombre ?? "Cargando..."}
                   </p>
@@ -227,9 +257,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                       : (profile?.rol ?? "")}
                   </p>
                 </div>
-              )}
             </Link>
-            {!collapsed && (
+            <div className={cn(collapsed && "lg:hidden")}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -247,7 +276,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <LogOut className="size-3.5 text-muted-foreground" />
               </Button>
-            )}
+            </div>
           </div>
           <Button
             variant="ghost"
@@ -279,26 +308,28 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <header className="sticky top-0 z-20 border-b border-border bg-surface-glass backdrop-blur-xl">
-          <div className="grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 lg:px-7">
+          <div className="grid min-h-16 min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2.5 sm:gap-3 sm:px-4 lg:px-7">
             <Button
               variant="ghost"
               size="icon"
               className="lg:hidden"
               onClick={() => setOpen(true)}
               aria-label="Abrir navegación"
+              aria-controls="arca-mobile-navigation"
+              aria-expanded={open}
             >
               <Menu className="size-5" />
             </Button>
-            <div className="flex min-w-0 items-center gap-4">
-              <span className="hidden text-[11px] font-semibold uppercase text-muted-foreground sm:block">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+              <span className="hidden text-[11px] font-semibold uppercase text-muted-foreground lg:block">
                 {title}
               </span>
-              <div className="hidden h-4 w-px bg-border sm:block" />
+              <div className="hidden h-4 w-px bg-border lg:block" />
               <GlobalSearch role={profile?.rol} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               <NotificationBell profile={profile} />
-              <span className="hidden rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary sm:inline">
+              <span className="hidden rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary lg:inline">
                 {profile?.rol === "medico" ? "Médico" : (profile?.rol ?? "")}
               </span>
               {(profile?.rol === "medico" || profile?.rol === "admin") ? (
@@ -328,7 +359,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1500px] px-4 py-5 lg:px-7 lg:py-6">
+        <main className="arca-app-content mx-auto w-full min-w-0 max-w-[1500px] px-3 py-4 sm:px-4 sm:py-5 lg:px-7 lg:py-6">
           {children}
         </main>
       </div>

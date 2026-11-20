@@ -216,7 +216,7 @@ export function GlobalSearch({ role }: { role: Role | undefined }) {
   if (!effectiveRole) return null;
 
   return (
-    <div ref={wrapper} className="relative min-w-0 flex-1 sm:max-w-sm">
+    <div ref={wrapper} className="relative w-full min-w-0 flex-1 sm:max-w-sm">
       <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface-raised/70 px-3 py-2">
         <Search className="size-4 shrink-0 text-muted-foreground" />
         <input
@@ -234,7 +234,7 @@ export function GlobalSearch({ role }: { role: Role | undefined }) {
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          placeholder="Buscar pacientes, guías y secciones"
+          placeholder="Buscar en ARCA Med"
         />
       </div>
       {open && query.trim() && (
@@ -242,7 +242,7 @@ export function GlobalSearch({ role }: { role: Role | undefined }) {
           id="arca-global-search-results"
           role="listbox"
           aria-label="Resultados de búsqueda"
-          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-xl sm:min-w-[320px]"
+          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60dvh] min-w-0 overflow-y-auto overscroll-contain rounded-lg border border-border bg-background p-1 shadow-xl sm:min-w-[320px]"
         >
           {loading ? (
             <p className="px-3 py-3 text-sm text-muted-foreground">Buscando…</p>

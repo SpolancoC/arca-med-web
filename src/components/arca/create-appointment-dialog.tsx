@@ -311,7 +311,7 @@ function AppointmentDialogContent({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/55 p-2 sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose();
       }}
@@ -321,7 +321,7 @@ function AppointmentDialogContent({
         aria-modal="true"
         aria-labelledby="appointment-dialog-title"
         aria-describedby="appointment-dialog-description"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-background p-5 shadow-2xl sm:p-6"
+        className="max-h-[90dvh] w-full min-w-0 max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-3 shadow-2xl sm:p-6"
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>

@@ -24,21 +24,6 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-type QuickRole = "medico";
-type QuickCredentials = { email: string; password: string };
-
-// Vite solo inyecta estos datos al iniciar el servidor de desarrollo.
-// En npm run build, la configuración siempre es null.
-declare const __ARCA_DEV_QUICK_ACCESS__: Partial<Record<QuickRole, QuickCredentials>> | null;
-
-const canUseQuickAccess =
-  import.meta.env.DEV &&
-  typeof window !== "undefined" &&
-  ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
-const QUICK_ACCESS = canUseQuickAccess ? __ARCA_DEV_QUICK_ACCESS__ : null;
-const ADMIN_EMAIL = "admin@arcamed.com";
-
 function LoginPage() {
   const navigate = useNavigate({ from: "/login" });
   const [email, setEmail] = useState("");
@@ -46,36 +31,6 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  async function quickLogin(role: QuickRole) {
-    setError("");
-    setLoading(true);
-
-    try {
-      const credentials = QUICK_ACCESS?.[role];
-      if (!credentials?.email || !credentials?.password) {
-        throw new Error("Acceso rápido no configurado en .env.local");
-      }
-
-      const response = await login(credentials);
-
-      localStorage.setItem("arca-med-token", response.access_token);
-      localStorage.setItem("arca-med-role", response.rol);
-
-      await navigate({
-        to: response.rol === "admin" ? "/admin/inicio" : response.rol === "paciente" ? "/mi-espacio" : "/",
-        replace: true,
-      });
-    } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("No fue posible iniciar sesión. Inténtalo nuevamente.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,7 +64,7 @@ function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-background px-4 py-10 text-foreground">
+    <main className="grid min-h-dvh place-items-center bg-background px-3 py-6 text-foreground sm:px-4 sm:py-10">
       <div className="w-full max-w-md">
         <div className="mb-7 flex items-center justify-center gap-3">
           <div className="grid size-11 place-items-center rounded-md bg-white p-1.5 shadow-sm" aria-hidden="true">
@@ -122,12 +77,12 @@ function LoginPage() {
             </p>
           </div>
         </div>
-        <section className="rounded-lg border border-border bg-card/75 p-6 shadow-clinical backdrop-blur-md sm:p-8">
+        <section className="rounded-lg border border-border bg-card/75 p-4 shadow-clinical backdrop-blur-md sm:p-8">
           <div className="text-center">
             <p className="text-xs font-semibold uppercase text-accent">
               Ingreso personal de la salud
             </p>
-            <h1 className="mt-2 font-display text-3xl font-semibold">
+            <h1 className="mt-2 font-display text-2xl font-semibold sm:text-3xl">
               Iniciar sesión
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -181,31 +136,6 @@ function LoginPage() {
                 </Button>
               </span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setEmail(ADMIN_EMAIL);
-                  setPassword("");
-                  setError("");
-                }}
-                disabled={loading}
-              >
-                Admin
-              </Button>
-              {QUICK_ACCESS?.medico?.email && QUICK_ACCESS.medico.password && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void quickLogin("medico")}
-                  disabled={loading}
-                >
-                  Médico
-                </Button>
-              )}
-            </div>
-
             <div className="flex justify-end">
               <Link
                 to="/forgot-password"

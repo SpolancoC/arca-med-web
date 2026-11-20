@@ -255,3 +255,18 @@
   :root[data-density="compacta"] main :is(.space-y-5,.space-y-6) > :not([hidden]) ~ :not([hidden]) { margin-top: 0.8rem; }
   :root[data-density="compacta"] main :is(input, select, textarea) { padding-top: 0.4rem; padding-bottom: 0.4rem; }
 }
+
+/* Ajustes móviles transversales: evitar que textos y controles empujen el viewport. */
+html, body { max-width: 100%; overflow-x: clip; }
+@media (max-width: 639px) {
+  .arca-app-content { min-width: 0; }
+  .arca-app-content :is(h1, h2, h3, p, dd, dt) { overflow-wrap: anywhere; }
+  .arca-app-content :is(img, video, svg) { max-width: 100%; }
+  .arca-app-content :is(input, select, textarea) { max-width: 100%; }
+  .arca-app-content :is(.grid, .flex) { min-width: 0; }
+  .arca-app-content :is(table) { width: 100%; }
+}
+/* Un popup o un menú debe desplazar su contenido, no la página que hay debajo. */
+@supports (height: 100dvh) {
+  .arca-mobile-menu { max-height: 100dvh; }
+}

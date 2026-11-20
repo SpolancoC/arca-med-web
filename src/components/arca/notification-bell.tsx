@@ -274,7 +274,7 @@ export function NotificationBell({ profile }: { profile: UserProfile | null }) {
         )}
       </Button>
       {open && (
-        <div role="dialog" aria-label="Notificaciones" className="absolute right-0 top-full z-50 mt-2 w-[min(90vw,380px)] overflow-hidden rounded-lg border border-border bg-background shadow-xl">
+        <div role="dialog" aria-label="Notificaciones" className="fixed inset-x-3 top-[4.5rem] z-50 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-lg border border-border bg-background shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[min(90vw,380px)]">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <p className="font-semibold">Notificaciones</p>
