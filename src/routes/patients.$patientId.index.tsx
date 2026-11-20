@@ -523,6 +523,18 @@ function PatientDetail() {
               return <div key={exercise.id} className="flex flex-col rounded-md border border-border p-3 text-sm">
                 <p className="flex items-center gap-2 font-semibold"><Dumbbell className="size-4"/>{exercise.nombre_ejercicio}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{exercise.articulacion}</p>
+                {exercise.imagen_url && (
+                  <div className="mt-3 flex h-48 w-full items-center justify-center overflow-hidden rounded-md border border-border bg-muted/10 p-2 sm:h-56">
+                    <img
+                      src={exercise.imagen_url.startsWith("http")
+                        ? exercise.imagen_url
+                        : `${(import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")}/${exercise.imagen_url.replace(/^\//, "")}`}
+                      alt={`Imagen del ejercicio ${exercise.nombre_ejercicio}`}
+                      className="h-full w-full object-contain"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
                 <p className="mt-2 flex-1 whitespace-pre-wrap text-xs text-muted-foreground">{exercise.descripcion || "Sin descripción"}</p>
                 <Button className="mt-3" size="sm" variant={selected ? "secondary" : "primary"} onClick={()=>setSelectedExercises(prev=>selected ? prev.filter(x=>x!==exercise.id) : [...prev,exercise.id])}>{selected ? <><X className="mr-1 size-3"/>Quitar de la lista</> : <><Plus className="mr-1 size-3"/>Agregar a la lista</>}</Button>
               </div>;

@@ -9,6 +9,8 @@ import { getProfile } from "@/services/profile";
 import {
   createAppointment,
   listAppointments,
+  listSpecialties,
+  type Specialty,
   localDateToISO,
   isSameLocalDay,
   type Appointment,
@@ -103,6 +105,8 @@ function AppointmentDialogContent({
 }: Omit<Props, "open">) {
   const [patients, setPatients] = useState<RegisteredPatient[]>([]);
   const [doctorId, setDoctorId] = useState<number | null>(null);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [specialtyId, setSpecialtyId] = useState("");
   const [patientId, setPatientId] = useState("");
   const [date, setDate] = useState(() =>
     initialDate && dateFromKey(initialDate) ? initialDate : dateKey(new Date()),
@@ -122,9 +126,10 @@ function AppointmentDialogContent({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([getMedicalPatients(), getProfile()])
-      .then(([list, profile]) => {
+    void Promise.all([getMedicalPatients(), getProfile(), listSpecialties()])
+      .then(([list, profile, specialtyList]) => {
         if (!active) return;
+        setSpecialties(specialtyList);
         if (profile.rol !== "medico") {
           throw new Error(
             "Solo los médicos pueden agendar desde este formulario.",
@@ -247,8 +252,8 @@ function AppointmentDialogContent({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    if (!doctorId || !patientId) {
-      setError("Selecciona un paciente.");
+    if (!doctorId || !patientId || !specialtyId) {
+      setError("Selecciona un paciente y una especialidad.");
       return;
     }
     try {
@@ -279,6 +284,7 @@ function AppointmentDialogContent({
       }
       await createAppointment({
         paciente_id: Number(patientId),
+        especialidad_id: Number(specialtyId),
         medico_id: doctorId,
         fecha_hora: iso,
         duracion_minutos: duration,
@@ -311,7 +317,7 @@ function AppointmentDialogContent({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/55 p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose();
       }}
@@ -321,7 +327,7 @@ function AppointmentDialogContent({
         aria-modal="true"
         aria-labelledby="appointment-dialog-title"
         aria-describedby="appointment-dialog-description"
-        className="max-h-[90dvh] w-full min-w-0 max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-background p-3 shadow-2xl sm:p-6"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-background p-5 shadow-2xl sm:p-6"
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
@@ -375,6 +381,12 @@ function AppointmentDialogContent({
                 No hay pacientes disponibles para agendar.
               </p>
             )}
+            <label className="block text-sm font-medium">Especialidad
+              <select required value={specialtyId} onChange={event => setSpecialtyId(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2 text-sm">
+                <option value="">Seleccionar especialidad</option>
+                {specialties.map(item => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+              </select>
+            </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-sm font-medium">
                 Fecha

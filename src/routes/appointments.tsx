@@ -8,6 +8,8 @@ import {
   createAppointment,
   dateTimeLocalValue,
   listAppointments,
+  listSpecialties,
+  type Specialty,
   localDateToISO,
   updateAppointment,
   type Appointment,
@@ -90,6 +92,8 @@ function CalendarSelector({ selected, month, onMonthChange, onSelect }: {
 function AdminAppointments() {
   const [items, setItems] = useState<Appointment[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [specialty, setSpecialty] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -110,7 +114,8 @@ function AdminAppointments() {
     setLoading(true);
     setError(null);
     try {
-      const [appointments, people] = await Promise.all([listAppointments(), listAdminUsers()]);
+      const [appointments, people, specialtyList] = await Promise.all([listAppointments(), listAdminUsers(), listSpecialties()]);
+      setSpecialties(specialtyList);
       setItems(appointments);
       setUsers(people);
     } catch (e) {
@@ -138,11 +143,11 @@ function AdminAppointments() {
   function openForm(item: Appointment | "new") {
     setFormError(null);
     if (item === "new") {
-      setPatient(""); setDoctor(""); setSelectedDate(""); setSelectedTime(""); setDuration(30); setReason("");
+      setPatient(""); setDoctor(""); setSpecialty(""); setSelectedDate(""); setSelectedTime(""); setDuration(30); setReason("");
       setCalendarMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
     } else {
       const local = dateTimeLocalValue(item.fecha_hora);
-      setPatient(String(item.paciente_id)); setDoctor(String(item.medico_id));
+      setPatient(String(item.paciente_id)); setDoctor(String(item.medico_id)); setSpecialty(String(item.especialidad_id));
       setSelectedDate(local.slice(0, 10)); setSelectedTime(local.slice(11, 16));
       setCalendarMonth(new Date(dateFromKey(local.slice(0, 10)).getFullYear(), dateFromKey(local.slice(0, 10)).getMonth(), 1));
       setDuration(item.duracion_minutos); setReason(item.motivo ?? "");
@@ -170,8 +175,8 @@ function AdminAppointments() {
       if (!options.includes(selectedTime)) throw new Error("Ese horario ya no está disponible. Selecciona otra hora.");
       const iso = localDateToISO(`${selectedDate}T${selectedTime}`);
       if (editing === "new") {
-        if (!patient) throw new Error("Selecciona un paciente.");
-        await createAppointment({ paciente_id: Number(patient), medico_id: Number(doctor), fecha_hora: iso, duracion_minutos: duration, motivo: reason.trim() || null });
+        if (!patient || !specialty) throw new Error("Selecciona un paciente y una especialidad.");
+        await createAppointment({ paciente_id: Number(patient), medico_id: Number(doctor), especialidad_id: Number(specialty), fecha_hora: iso, duracion_minutos: duration, motivo: reason.trim() || null });
       } else {
         await updateAppointment(editing.id, { fecha_hora: iso, duracion_minutos: duration, motivo: reason.trim() || null });
       }
@@ -202,13 +207,20 @@ function AdminAppointments() {
     <div className="rounded-md border border-border bg-surface-raised p-4">
       <label className="text-sm font-medium" htmlFor="appointment-state">Mostrar: </label>
       <select id="appointment-state" className="ml-2 rounded-md border border-border bg-background px-3 py-2 text-sm" value={filter} onChange={e => setFilter(e.target.value)}><option value="todos">Todas</option><option value="programada">Programadas</option><option value="completada">Completadas</option><option value="cancelada">Canceladas</option></select>
-      {loading ? <p className="mt-4 text-sm text-muted-foreground">Cargando citas...</p> : !error && filtered.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">No hay citas para el filtro seleccionado.</p> : <div className="mt-4 max-w-full overflow-x-auto overscroll-x-contain"><table className="min-w-[730px] w-full text-left text-sm"><thead className="border-b border-border text-muted-foreground"><tr><th className="px-3 py-2">Fecha y hora</th><th className="px-3 py-2">Paciente</th><th className="px-3 py-2">Médico</th><th className="px-3 py-2">Duración</th><th className="px-3 py-2">Motivo</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Acciones</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id} className="border-b border-border/70"><td className="whitespace-nowrap px-3 py-3">{appointmentDate(item.fecha_hora)}</td><td className="px-3 py-3">{item.paciente_nombre}</td><td className="px-3 py-3">{item.medico_nombre}</td><td className="px-3 py-3">{item.duracion_minutos} min</td><td className="max-w-48 break-words px-3 py-3">{item.motivo || "—"}</td><td className="px-3 py-3 capitalize">{item.estado}</td><td className="px-3 py-3">{item.estado === "programada" ? <div className="flex flex-wrap gap-1"><Button variant="secondary" size="sm" onClick={() => openForm(item)}>Editar</Button><Button variant="outline" size="sm" onClick={() => void changeStatus(item, "completada")}>Completar</Button><Button variant="outline" size="sm" onClick={() => void changeStatus(item, "cancelada")}>Cancelar</Button></div> : <span className="text-muted-foreground">—</span>}</td></tr>)}</tbody></table></div>}
+      {loading ? <p className="mt-4 text-sm text-muted-foreground">Cargando citas...</p> : !error && filtered.length === 0 ? <p className="mt-4 text-sm text-muted-foreground">No hay citas para el filtro seleccionado.</p> : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-border text-muted-foreground"><tr><th className="px-3 py-2">Fecha y hora</th><th className="px-3 py-2">Paciente</th><th className="px-3 py-2">Médico</th><th className="px-3 py-2">Especialidad</th><th className="px-3 py-2">Duración</th><th className="px-3 py-2">Motivo</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Acciones</th></tr></thead><tbody>{filtered.map(item => <tr key={item.id} className="border-b border-border/70"><td className="whitespace-nowrap px-3 py-3">{appointmentDate(item.fecha_hora)}</td><td className="px-3 py-3">{item.paciente_nombre}</td><td className="px-3 py-3">{item.medico_nombre}</td><td className="px-3 py-3">{item.especialidad_nombre || "—"}</td><td className="px-3 py-3">{item.duracion_minutos} min</td><td className="max-w-48 break-words px-3 py-3">{item.motivo || "—"}</td><td className="px-3 py-3 capitalize">{item.estado}</td><td className="px-3 py-3">{item.estado === "programada" ? <div className="flex flex-wrap gap-1"><Button variant="secondary" size="sm" onClick={() => openForm(item)}>Editar</Button><Button variant="outline" size="sm" onClick={() => void changeStatus(item, "completada")}>Completar</Button><Button variant="outline" size="sm" onClick={() => void changeStatus(item, "cancelada")}>Cancelar</Button></div> : <span className="text-muted-foreground">—</span>}</td></tr>)}</tbody></table></div>}
     </div>
-    {editing && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/50 p-2 sm:p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !saving) setEditing(null); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="appointment-form-title" className="max-h-[90dvh] w-full min-w-0 max-w-xl overflow-y-auto overscroll-contain rounded-lg border border-border bg-background p-3 shadow-xl sm:p-6">
+    {editing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !saving) setEditing(null); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="appointment-form-title" className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-background p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between"><h2 id="appointment-form-title" className="font-display text-xl font-semibold">{editing === "new" ? "Nueva cita" : "Editar cita"}</h2><Button variant="ghost" size="icon" onClick={() => setEditing(null)} disabled={saving} aria-label="Cerrar"><X className="size-4" /></Button></div>
         <form onSubmit={e => void submit(e)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Paciente<select required disabled={editing !== "new"} value={patient} onChange={e => setPatient(e.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2"><option value="">Seleccionar paciente</option>{users.filter(u => u.rol === "paciente" && u.activo).map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select></label><label className="block text-sm font-medium">Médico<select required disabled={editing !== "new"} value={doctor} onChange={e => { setDoctor(e.target.value); setSelectedTime(""); }} className="mt-1 w-full rounded-md border border-border bg-background p-2"><option value="">Seleccionar médico</option>{users.filter(u => u.rol === "medico" && u.activo).map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}</select></label></div>
+          <label className="block text-sm font-medium">Especialidad
+            <select required={editing === "new"} disabled={editing !== "new"} value={specialty} onChange={e => setSpecialty(e.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2">
+              <option value="">Seleccionar especialidad</option>
+              {specialties.map(item => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+            </select>
+            {editing !== "new" && <span className="mt-1 block text-xs text-muted-foreground">La especialidad de una cita existente no se puede cambiar.</span>}
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <span className="flex items-center gap-2 text-sm font-medium"><CalendarDays className="size-4" />Fecha de la cita</span>

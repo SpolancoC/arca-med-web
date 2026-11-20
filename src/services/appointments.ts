@@ -5,6 +5,9 @@ export type Appointment = {
   id: number;
   paciente_id: number;
   paciente_nombre: string;
+  especialidad_id: number;
+  especialidad_nombre: string;
+  articulaciones: string[];
   medico_id: number;
   medico_nombre: string;
   fecha_hora: string;
@@ -14,13 +17,21 @@ export type Appointment = {
 };
 export type CreateAppointment = {
   paciente_id: number;
-  medico_id: number;
+  medico_id?: number;
+  especialidad_id: number;
   fecha_hora: string;
   duracion_minutos: number;
   motivo?: string | null;
 };
 export type UpdateAppointment = Partial<Pick<CreateAppointment, "fecha_hora" | "duracion_minutos" | "motivo">> & { estado?: AppointmentStatus };
 
+export type Specialty = { id: number; nombre: string; area: string; articulaciones: string[] };
+export function listSpecialties(): Promise<Specialty[]> {
+  return apiRequest<Specialty[]>("/especialidades");
+}
+export function listMyAppointments(onlyUpcoming = true): Promise<Appointment[]> {
+  return apiRequest<Appointment[]>(`/mis-citas?solo_proximas=${onlyUpcoming}`);
+}
 export function listAppointments(filters: {desde?: string; hasta?: string; medico_id?: number; paciente_id?: number; estado?: AppointmentStatus} = {}): Promise<Appointment[]> {
   const query = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== "") query.set(key, String(value)); });

@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/arca/ui-kit";
 import { Section } from "@/components/arca/clinical";
 import { Button } from "@/components/ui/button";
 import type { Exercise } from "@/services/exercises";
+import { appointmentDate } from "@/services/appointments";
+import { getMyAppointments, savePreconsultationSymptoms, uploadPreconsultationDocument, savePreconsultationMetric, sendPreconsultation, type PatientAppointment } from "@/services/preconsultation";
 import { listPatientExercises, recordExercise, submitSymptom, submitMetric, uploadPatientDocument } from "@/services/patient-portal";
 
 export const Route = createFileRoute("/mi-espacio")({ component: PatientPortal });
@@ -12,6 +14,18 @@ function errorMessage(error: unknown) { return error instanceof Error ? error.me
 
 function PatientPortal() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [myAppointments,setMyAppointments]=useState<PatientAppointment[]>([]);
+  const [appointmentError,setAppointmentError]=useState("");
+  const [selectedAppointment,setSelectedAppointment]=useState("");
+  const [preSymptoms,setPreSymptoms]=useState("");
+  const [preJoint,setPreJoint]=useState("");
+  const [preSide,setPreSide]=useState("derecho");
+  const [preFile,setPreFile]=useState<File|null>(null);
+  const [preMin,setPreMin]=useState("");
+  const [preMax,setPreMax]=useState("");
+  const [symptomsSaved,setSymptomsSaved]=useState(false);
+  const [sentThisSession,setSentThisSession]=useState<number[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -25,6 +39,26 @@ function PatientPortal() {
     listPatientExercises().then(items => {if(mounted) setExercises(items);}).catch(e=>{if(mounted) setError(errorMessage(e));}).finally(()=>{if(mounted) setLoading(false);});
     return () => {mounted=false;};
   }, []);
+  async function loadMyAppointments(){try{setMyAppointments(await getMyAppointments());setAppointmentError("");}catch(e){setAppointmentError(errorMessage(e));}}
+  useEffect(()=>{void loadMyAppointments();},[]);
+  const selectedCita=myAppointments.find(c=>String(c.id)===selectedAppointment);
+  const preconsultationSent=!!selectedCita?.preconsulta_enviada_en || (selectedCita ? sentThisSession.includes(selectedCita.id) : false);
+  const joints=selectedCita?.articulaciones ?? [];
+  async function savePreSymptoms(e:FormEvent){e.preventDefault();if(!selectedCita)return;
+    const data={descripcion:preSymptoms.trim(),articulacion:preJoint,lado:(preJoint.toLowerCase().includes("cervical") || preJoint.toLowerCase().includes("lumbar"))?undefined:preSide as "derecho"|"izquierdo"};
+    await run(async()=>{await savePreconsultationSymptoms(selectedCita.id,data);setSymptomsSaved(true);},"Síntomas de esta cita guardados.");
+  }
+  async function savePreDocument(e:FormEvent){e.preventDefault();if(!selectedCita||!preFile)return;
+    await run(async()=>{await uploadPreconsultationDocument(selectedCita.id,preFile);setPreFile(null);},"Documento de preconsulta enviado.");
+  }
+  async function savePreMetric(e:FormEvent){e.preventDefault();if(!selectedCita)return;
+    if(preMin===""||preMax===""||Number(preMin)>Number(preMax)){setError("Revisa los ángulos mínimo y máximo.");return;}
+    await run(()=>savePreconsultationMetric(selectedCita.id,{angulo_minimo:Number(preMin),angulo_maximo:Number(preMax)}),"Medición asociada a la cita.");
+  }
+  async function finishPreconsultation(){if(!selectedCita)return;
+    if(!window.confirm("¿Enviar la preconsulta? Después de enviarla no podrás modificar los síntomas."))return;
+    await run(async()=>{await sendPreconsultation(selectedCita.id);setSentThisSession(prev=>[...prev,selectedCita.id]);await loadMyAppointments();},"Preconsulta enviada. El análisis se procesará en el servidor.");
+  }
   async function run(task: () => Promise<unknown>, success: string) {
     setBusy(true); setError(""); setNotice("");
     try { await task(); setNotice(success); } catch(e) { setError(errorMessage(e)); } finally {setBusy(false);}
@@ -44,6 +78,35 @@ function PatientPortal() {
     <PageHeader eyebrow="Portal paciente" title="Mi espacio" description="Ejercicios e información que puedes registrar en ARCA Med." />
     {error && <div role="alert" className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">{error}</div>}
     {notice && <div role="status" className="rounded-md border border-border bg-surface-raised p-3 text-sm">{notice}</div>}
+    <Section title="Preconsulta de mi cita" description="Registra síntomas y mediciones asociados a una cita antes de enviarlos a evaluación.">
+      <div className="mt-4 space-y-4">
+        {appointmentError && <p role="alert" className="text-sm text-destructive">No se pudieron consultar tus citas: {appointmentError}</p>}
+        <label className="block text-sm">Cita
+          <select value={selectedAppointment} onChange={e=>{setSelectedAppointment(e.target.value);setPreJoint("");setPreSymptoms("");setSymptomsSaved(false);}} className="mt-1 w-full rounded-md border border-border bg-background p-2">
+            <option value="">Selecciona una cita</option>
+            {myAppointments.filter(c=>c.estado==="programada" && new Date(c.fecha_hora).getTime()>Date.now()).map(c=><option key={c.id} value={c.id}>{appointmentDate(c.fecha_hora)} — {c.especialidad_nombre}</option>)}
+          </select>
+        </label>
+        {selectedCita && <div className="space-y-4 rounded-md border border-border p-3 sm:p-4">
+          <p className="text-sm">Especialidad: <strong>{selectedCita.especialidad_nombre}</strong></p>
+          {preconsultationSent ? <p role="status" className="text-sm font-semibold">Esta preconsulta ya fue enviada.</p> : <>
+            <p className="text-xs text-muted-foreground">El backend no informa todavía el estado de preconsulta en la lista de citas. Si ya la enviaste, el servidor impedirá volver a enviarla.</p>
+            <form onSubmit={e=>void savePreSymptoms(e)} className="space-y-3">
+              <h3 className="font-semibold">1. Síntomas</h3>
+              <label className="block text-sm">Articulación
+                <select required value={preJoint} onChange={e=>{setPreJoint(e.target.value);setSymptomsSaved(false);}} className="mt-1 w-full rounded-md border border-border bg-background p-2"><option value="">Seleccionar</option>{joints.map(j=><option key={j} value={j}>{j}</option>)}</select>
+              </label>
+              {preJoint && !["cervical","lumbar"].some(x=>preJoint.toLowerCase().includes(x)) && <label className="block text-sm">Lado<select value={preSide} onChange={e=>setPreSide(e.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2"><option value="derecho">Derecho</option><option value="izquierdo">Izquierdo</option></select></label>}
+              <label className="block text-sm">Descripción<textarea required value={preSymptoms} onChange={e=>{setPreSymptoms(e.target.value);setSymptomsSaved(false);}} className="mt-1 w-full rounded-md border border-border bg-background p-2" rows={3}/></label>
+              <Button type="submit" disabled={busy || !preJoint || !preSymptoms.trim()}>Guardar síntomas de la cita</Button>
+            </form>
+            <form onSubmit={e=>void savePreDocument(e)} className="space-y-2"><h3 className="font-semibold">2. Documento (opcional)</h3><input type="file" aria-label="Documento para preconsulta" onChange={e=>setPreFile(e.target.files?.[0]||null)} className="block w-full text-sm"/><Button type="submit" variant="secondary" disabled={busy || !preFile}>Adjuntar documento</Button></form>
+            <form onSubmit={e=>void savePreMetric(e)} className="space-y-2"><h3 className="font-semibold">3. Medición articular (opcional)</h3><p className="text-xs text-muted-foreground">Primero registra los síntomas. La articulación y el lado se asociarán automáticamente.</p><div className="grid gap-2 sm:grid-cols-2"><label className="text-sm">Ángulo mínimo<input type="number" min={0} max={180} step="any" required value={preMin} onChange={e=>setPreMin(e.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2"/></label><label className="text-sm">Ángulo máximo<input type="number" min={0} max={180} step="any" required value={preMax} onChange={e=>setPreMax(e.target.value)} className="mt-1 w-full rounded-md border border-border bg-background p-2"/></label></div><Button type="submit" variant="secondary" disabled={busy || !symptomsSaved}>Guardar medición</Button></form>
+            <div className="border-t border-border pt-3"><Button type="button" disabled={busy || !symptomsSaved} onClick={()=>void finishPreconsultation()}>Enviar preconsulta</Button><p className="mt-2 text-xs text-muted-foreground">Al enviarla se inicia el procesamiento del prediagnóstico. No sustituye la evaluación de un profesional.</p></div>
+          </>}
+        </div>}
+      </div>
+    </Section>
     <Section title="Biblioteca de ejercicios" description="Consulta ejercicios y registra cada ejecución realizada.">
       <div className="mt-4 space-y-3">{loading ? <p className="text-sm text-muted-foreground">Cargando ejercicios…</p> : exercises.length===0 ? <p className="text-sm text-muted-foreground">No hay ejercicios disponibles.</p> : exercises.map(ex => <div key={ex.id} className="rounded-md border border-border p-4 space-y-2">
         <h3 className="font-semibold">{ex.nombre_ejercicio}</h3><p className="text-sm text-muted-foreground">{ex.articulacion} · {ex.descripcion || "Sin descripción"}</p>
