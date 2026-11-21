@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, createFileRoute, usePathname } from "@/lib/router";
 import { FileText, ArrowLeft } from "lucide-react";
 import { Section } from "@/components/arca/clinical";
+import { PatientDocumentOpenButton } from "@/components/arca/patient-document-open-button";
 import { getPatientSymptoms, getPatientDocuments, type PatientSymptom, type PatientDocument } from "@/services/patient-detail";
 
 export const Route = createFileRoute("/patients/$patientId/history")({
@@ -49,7 +50,7 @@ function PatientHistory() {
       {loading && <p className="mt-4 text-sm text-muted-foreground">Cargando historial...</p>}
       {errors.map(err=><p key={err} role="alert" className="mt-3 text-sm text-destructive">{err}</p>)}
       {!loading && <div className="mt-4 space-y-3">
-        {tab==="sintomas" ? (symptomList.length ? symptomList.map(s=><article key={s.id} className="rounded-md border border-border p-4"><p className="whitespace-pre-wrap text-sm">{s.descripcion}</p><p className="mt-2 text-xs text-muted-foreground">{displayDate(s.creado_en)}</p></article>) : <p className="text-sm text-muted-foreground">No hay síntomas registrados.</p>) : (documentList.length ? documentList.map(d=><article key={d.id} className="flex gap-3 rounded-md border border-border p-4"><FileText className="size-4 shrink-0 text-primary"/><div className="min-w-0"><p className="break-all text-sm font-medium">{d.nombre_archivo}</p><p className="mt-2 text-xs text-muted-foreground">{displayDate(d.subido_en)}</p></div></article>) : <p className="text-sm text-muted-foreground">No hay exámenes registrados.</p>)}
+        {tab==="sintomas" ? (symptomList.length ? symptomList.map(s=><article key={s.id} className="rounded-md border border-border p-4"><p className="whitespace-pre-wrap text-sm">{s.descripcion}</p><p className="mt-2 text-xs text-muted-foreground">{displayDate(s.creado_en)}</p></article>) : <p className="text-sm text-muted-foreground">No hay síntomas registrados.</p>) : (documentList.length ? documentList.map(d=><article key={d.id} className="flex gap-3 rounded-md border border-border p-4"><FileText className="size-4 shrink-0 text-primary"/><div className="min-w-0"><p className="break-all text-sm font-medium">{d.nombre_archivo}</p><p className="mt-2 text-xs text-muted-foreground">{displayDate(d.subido_en)}</p><PatientDocumentOpenButton patientId={id} documentId={d.id} filename={d.nombre_archivo} /></div></article>) : <p className="text-sm text-muted-foreground">No hay exámenes registrados.</p>)}
       </div>}
     </Section>
   </div>;

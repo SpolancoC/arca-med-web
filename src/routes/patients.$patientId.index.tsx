@@ -4,6 +4,7 @@ import { Link, createFileRoute } from "@/lib/router";
 import { ArrowLeft, FileText, Info, Dumbbell, Check, X, Plus } from "lucide-react";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
+import { PatientDocumentOpenButton } from "@/components/arca/patient-document-open-button";
 import { Section } from "@/components/arca/clinical";
 import {
   getPatientSummary,
@@ -92,6 +93,7 @@ function PatientDetail() {
   const [exerciseRegion, setExerciseRegion] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<number[]>([]);
   const [activeJoint, setActiveJoint] = useState("");
+  const [activeSide, setActiveSide] = useState("");
   const [summaryDecision, setSummaryDecision] = useState<"accepted" | "rejected" | null>(null);
   const [manualSummary, setManualSummary] = useState("");
   const [diagnosisDraft, setDiagnosisDraft] = useState("");
@@ -324,23 +326,37 @@ function PatientDetail() {
   const lastDocumentDay = sortedDocuments[0]?.subido_en?.slice(0, 10);
   const recentDocuments = sortedDocuments.filter((doc) => doc.subido_en.slice(0, 10) === lastDocumentDay);
   const olderDocuments = sortedDocuments.length > recentDocuments.length;
-  const jointNames = [...new Set((summary?.metricas_fisicas ?? []).map((m) => m.articulacion))];
-  const joint = jointNames.includes(activeJoint) ? activeJoint : (jointNames[0] ?? "");
-  const jointMetrics = (summary?.metricas_fisicas ?? [])
-    .filter((m) => m.articulacion === joint)
-    .sort((a, b) => {
-      const dateA = a.medido_en ? Date.parse(a.medido_en) : NaN;
-      const dateB = b.medido_en ? Date.parse(b.medido_en) : NaN;
-      return Number.isFinite(dateA) && Number.isFinite(dateB) ? dateA - dateB : 0;
+  // Las series se separan solo cuando la medición trae su lateralidad real.
+  const metricJointNames = [...new Set((summary?.metricas_fisicas ?? []).map(m => m.articulacion))];
+  const joint = metricJointNames.includes(activeJoint) ? activeJoint : (metricJointNames[0] ?? "");
+  const jointMetrics = (summary?.metricas_fisicas ?? []).filter(m => m.articulacion === joint);
+  const sideGroups = [
+    { key: "derecho", label: "Derecha" },
+    { key: "izquierdo", label: "Izquierda" },
+    { key: "sin-lado", label: "Lado sin registrar" },
+  ].map(group => {
+    const metrics = jointMetrics.filter(metric => {
+      const side = metric.lado?.toLowerCase().trim();
+      return group.key === "sin-lado" ? side !== "derecho" && side !== "izquierdo" : side === group.key;
+    }).sort((a, b) => {
+      const aTime = a.medido_en ? Date.parse(a.medido_en) : NaN;
+      const bTime = b.medido_en ? Date.parse(b.medido_en) : NaN;
+      return Number.isFinite(aTime) && Number.isFinite(bTime) ? aTime - bTime : 0;
     });
-  const chartData = jointMetrics.map((metric, index) => ({
-    registro: metric.medido_en && Number.isFinite(Date.parse(metric.medido_en))
-      ? formatMetricTime(metric.medido_en)
-      : `Registro ${index + 1}`,
-    fecha: formatMetricTime(metric.medido_en),
-    minimo: Number(metric.angulo_minimo),
-    maximo: Number(metric.angulo_maximo),
-  }));
+    return {
+      ...group,
+      metrics,
+      data: metrics.map((metric, index) => ({
+        registro: metric.medido_en && Number.isFinite(Date.parse(metric.medido_en))
+          ? formatMetricTime(metric.medido_en)
+          : `Registro ${index + 1}`,
+        fecha: formatMetricTime(metric.medido_en),
+        minimo: Number(metric.angulo_minimo),
+        maximo: Number(metric.angulo_maximo),
+      })),
+    };
+  }).filter(group => group.metrics.length > 0);
+  const selectedSideGroup = sideGroups.find(group => group.key === activeSide) ?? sideGroups[0];
   const exerciseRegions = [...new Set(exercises.map((exercise) => exercise.articulacion))]
     .filter(Boolean).sort((a, b) => a.localeCompare(b, "es"));
   const activeDiagnosis = diagnosisMode === "manual" ? diagnosisDraft : (acceptedDiagnosis || chosenDiagnosis);
@@ -407,7 +423,7 @@ function PatientDetail() {
                 {recentDocuments.map((doc) => (
                   <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border p-3">
                     <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
-                    <div className="min-w-0"><p className="break-all font-medium">{doc.nombre_archivo}</p><p className="text-xs text-muted-foreground">{formatRecordDate(doc.subido_en) ?? "Fecha no disponible"}</p></div>
+                    <div className="min-w-0"><p className="break-all font-medium">{doc.nombre_archivo}</p><p className="text-xs text-muted-foreground">{formatRecordDate(doc.subido_en) ?? "Fecha no disponible"}</p><PatientDocumentOpenButton patientId={id} documentId={doc.id} filename={doc.nombre_archivo} /></div>
                   </div>
                 ))}
                 {olderDocuments && (
@@ -429,13 +445,13 @@ function PatientDetail() {
             <h3 className="font-semibold">Resumen clínico generado por IA</h3>
             {summaryDecision === "rejected" ? (
               <div className="mt-3 space-y-2">
-                <p className="text-xs text-muted-foreground">Resumen rechazado en esta sesión. Puedes redactar uno manualmente, pero todavía no se guarda en el backend.</p>
+                <p className="text-xs text-muted-foreground">Puedes redactar un resumen alternativo para esta revisión. El texto no se conservará al salir.</p>
                 <textarea className="w-full rounded-md border border-border bg-background p-3 text-sm" rows={5} placeholder="Redactar resumen clínico (opcional)" value={manualSummary} onChange={(e)=>setManualSummary(e.target.value)} />
               </div>
             ) : (
               <p className="mt-3 whitespace-pre-wrap text-sm leading-7">{summary?.resumen_generado || "No hay resumen clínico disponible."}</p>
             )}
-            {reviewSuccess && <p role="status" className="mt-3 text-sm text-emerald-700">Revisión aceptada y registrada en el backend. La API no devuelve aún el estado de revisión al volver a entrar.</p>}
+            {reviewSuccess && <p role="status" className="mt-3 text-sm text-emerald-700">Revisión médica registrada correctamente.</p>}
             {isDoctor && summary && !reviewSuccess && summaryDecision !== "rejected" && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button disabled={reviewing} onClick={()=>setConfirmation("accept-summary")}><Check className="mr-1 size-4"/>Aceptar resumen</Button>
@@ -443,7 +459,7 @@ function PatientDetail() {
               </div>
             )}
             {reviewError && <p role="alert" className="mt-3 text-sm text-destructive">{reviewError}</p>}
-            <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La IA es apoyo clínico; la responsabilidad de confirmar el contenido corresponde al médico. El backend aún no admite persistir rechazos ni texto manual.</p>
+            <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La IA es una herramienta de apoyo; la revisión y decisión clínica corresponden al médico.</p>
           </div>
           <div className="rounded-md border border-border p-4">
             <h3 className="font-semibold">Diagnósticos diferenciales sugeridos</h3>
@@ -466,34 +482,79 @@ function PatientDetail() {
               <div className="mt-4">
                 <label htmlFor="diagnosis-manual" className="block text-sm font-medium">Diagnóstico clínico manual</label>
                 <textarea id="diagnosis-manual" rows={2} value={diagnosisDraft} onChange={(e) => setDiagnosisDraft(e.target.value)} placeholder="Escribe el diagnóstico del profesional (opcional)" className="mt-2 w-full rounded-md border border-border bg-background p-3 text-sm" />
-                <p className="mt-2 text-xs text-muted-foreground">Disponible tras rechazar las sugerencias. Aún no se guarda en el servidor.</p>
+                <p className="mt-2 text-xs text-muted-foreground">Este texto es temporal y no se conservará al salir.</p>
                 <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setDiagnosisMode("suggested"); setDiagnosisDraft(""); }}>Volver a sugerencias de IA</Button>
               </div>
             ) : acceptedDiagnosis ? (
               <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
                 <strong>Diagnóstico seleccionado:</strong> {acceptedDiagnosis}
-                <p className="mt-1 text-xs">Selección provisional de esta sesión; no se guarda aún en el backend.</p>
+                <p className="mt-1 text-xs">Selección temporal; no se conservará al salir.</p>
               </div>
             ) : null}
           </div>
         </div>
       </Section>
 
-      <Section title="Rango de movimiento" description="Mediciones por articulación disponibles desde el backend">
+      <Section title="Rango de movimiento" description="Evolución de las mediciones por articulación y extremidad">
         <div className="mt-4 space-y-4">
-          {jointNames.length ? (
+          {metricJointNames.length ? (
             <>
               <div role="tablist" aria-label="Articulaciones" className="flex flex-wrap gap-2">
-                {jointNames.map((name) => <button key={name} type="button" role="tab" aria-selected={joint===name} onClick={()=>setActiveJoint(name)} className={`rounded-md border px-3 py-2 text-sm ${joint===name ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border"}`}>{name}</button>)}
+                {metricJointNames.map(name => (
+                  <button key={name} type="button" role="tab" aria-selected={joint === name}
+                    onClick={() => setActiveJoint(name)}
+                    className={`rounded-md border px-3 py-2 text-sm ${joint === name ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border"}`}>
+                    {name}
+                  </button>
+                ))}
               </div>
-              <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-border"><th className="py-2">Registro</th><th>Fecha y hora</th><th>Ángulo mínimo</th><th>Ángulo máximo</th></tr></thead><tbody>{jointMetrics.map((m,i)=><tr key={i} className="border-b border-border"><td className="py-2">{i+1}</td><td className="pr-4">{formatMetricTime(m.medido_en)}</td><td>{m.angulo_minimo}°</td><td>{m.angulo_maximo}°</td></tr>)}</tbody></table></div>
-              <div className="rounded-md border border-border p-3">
-                <h3 className="text-sm font-semibold">Comparación de mediciones · {joint}</h3>
-                {chartData.length > 0 ? (
-                  <div className="mt-3 h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="registro"/><YAxis unit="°"/><Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.fecha ? `${String(label)} · ${payload[0].payload.fecha}` : String(label)} /><Legend/><Line dataKey="minimo" name="Mínimo" stroke="#0d9488" strokeWidth={2} dot={{r: 5}} activeDot={{r: 7}}/><Line dataKey="maximo" name="Máximo" stroke="#2563eb" strokeWidth={2} dot={{r: 5}} activeDot={{r: 7}}/></LineChart></ResponsiveContainer></div>
-                ) : <p className="mt-3 text-sm text-muted-foreground">Solo existe un registro para esta articulación. Se necesitan más mediciones para comparar.</p>}
-                <p className="mt-3 text-xs text-muted-foreground">Cada punto representa una medición, incluso si solo hay una. El backend actual no incluye fecha y hora (medido_en) en /resumen, por lo que el orden todavía no acredita una evolución cronológica. Cuando se exponga medido_en, se mostrará aquí sin alterar este componente.</p>
-              </div>
+              {sideGroups.length > 0 && (
+                <>
+                  {sideGroups.length > 1 && <div role="tablist" aria-label={`Extremidad de ${joint}`} className="flex flex-wrap gap-2">
+                    {sideGroups.map(group => (
+                      <button
+                        key={`${joint}-${group.key}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={selectedSideGroup?.key === group.key}
+                        onClick={() => setActiveSide(group.key)}
+                        className={`rounded-md border px-3 py-2 text-sm ${selectedSideGroup?.key === group.key ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border"}`}
+                      >
+                        {group.label}
+                      </button>
+                    ))}
+                  </div>}
+                  {selectedSideGroup && (
+                    <div key={`${joint}-${selectedSideGroup.key}`} role="tabpanel" className="min-w-0 rounded-md border border-border p-3 sm:p-4">
+                      <h3 className="text-base font-semibold">{joint} · {selectedSideGroup.label}</h3>
+                      <div className="mt-4 h-72 w-full min-w-0 sm:h-80 lg:h-96">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={selectedSideGroup.data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3"/>
+                            <XAxis dataKey="registro" tick={{fontSize: 11}} minTickGap={16}/>
+                            <YAxis unit="°" width={45}/>
+                            <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.fecha ? String(payload[0].payload.fecha) : String(label)} />
+                            <Legend/>
+                            <Line type="linear" dataKey="minimo" name="Mínimo" stroke="#0d9488" strokeWidth={2} dot={{r: 5}} activeDot={{r: 7}} isAnimationActive={false}/>
+                            <Line type="linear" dataKey="maximo" name="Máximo" stroke="#2563eb" strokeWidth={2} dot={{r: 5}} activeDot={{r: 7}} isAnimationActive={false}/>
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="w-full min-w-[380px] text-left text-sm">
+                          <thead><tr className="border-b border-border"><th className="py-2">Registro</th><th>Fecha y hora</th><th>Ángulo mínimo</th><th>Ángulo máximo</th></tr></thead>
+                          <tbody>{selectedSideGroup.metrics.map((metric, index) => (
+                            <tr key={index} className="border-b border-border">
+                              <td className="py-2">{index + 1}</td><td className="pr-4">{formatMetricTime(metric.medido_en)}</td>
+                              <td>{metric.angulo_minimo}°</td><td>{metric.angulo_maximo}°</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </>
           ) : <p className="text-sm text-muted-foreground">No hay mediciones registradas.</p>}
         </div>
@@ -513,7 +574,7 @@ function PatientDetail() {
             <div className="mt-2 flex flex-wrap gap-2">{diagnosisSuggestedRegions.map(region => <Button key={region} type="button" size="sm" variant="secondary" onClick={() => setExerciseRegion(region)}>{region}</Button>)}</div>
             <p className="mt-2 text-xs text-muted-foreground">Coincidencia por términos del diagnóstico, no recomendación clínica automática. El médico debe verificar si corresponde.</p>
           </div>}
-          <p className="text-xs text-muted-foreground">Primero selecciona una articulación para consultar sus ejercicios. El guardado de pautas requiere una API adicional.</p>
+          <p className="text-xs text-muted-foreground">Selecciona una articulación para consultar sus ejercicios.</p>
           {exercisesLoading && <p className="text-sm text-muted-foreground">Cargando ejercicios...</p>}
           {exercisesError && <p role="alert" className="text-sm text-destructive">{exercisesError}</p>}
           {!exerciseRegion && !exercisesLoading && !exercisesError && <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Selecciona una articulación para mostrar ejercicios disponibles.</p>}
@@ -544,7 +605,7 @@ function PatientDetail() {
           <div className="rounded-md border border-border bg-muted/20 p-4">
             <h3 className="font-semibold">Lista de ejercicios seleccionados ({selectedExercises.length})</h3>
             {selectedExercises.length ? <ul className="mt-3 space-y-2">{selectedExercises.map(exerciseId=>{ const ex=exercises.find(e=>e.id===exerciseId);return ex ? <li key={exerciseId} className="flex items-center justify-between gap-2 text-sm"><span>{ex.nombre_ejercicio} · {ex.articulacion}</span><button type="button" className="text-primary hover:underline" onClick={()=>setSelectedExercises(prev=>prev.filter(x=>x!==exerciseId))}>Quitar</button></li> : null; })}</ul> : <p className="mt-2 text-sm text-muted-foreground">Todavía no has agregado ejercicios.</p>}
-            <p className="mt-3 text-xs text-muted-foreground">Selección temporal: todavía no se ha asignado ni guardado en el servidor.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Lista temporal para revisión; aún no constituye una asignación al paciente.</p>
           </div>
         </div>
       </Section>
@@ -552,7 +613,7 @@ function PatientDetail() {
       {confirmation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation">
         <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-xl">
           <h2 id="confirm-title" className="text-lg font-semibold">Confirmar decisión</h2>
-          <p className="mt-3 text-sm">{confirmation==="accept-summary" ? "¿Deseas aceptar este resumen y registrar su revisión médica en el servidor?" : confirmation==="reject-summary" ? "¿Deseas rechazar el resumen de IA? Podrás escribir otro o dejarlo en blanco. El rechazo no se guardará todavía en el backend." : confirmation === "reject-diagnosis" ? "¿Deseas rechazar los diagnósticos sugeridos por IA y habilitar el ingreso manual? La elección solo permanecerá en esta sesión." : `¿Deseas utilizar «${chosenDiagnosis}» como diagnóstico provisional? No se guardará todavía en el backend.`}</p>
+          <p className="mt-3 text-sm">{confirmation==="accept-summary" ? "¿Deseas aceptar este resumen y registrar su revisión médica?" : confirmation==="reject-summary" ? "¿Deseas rechazar el resumen de IA? Podrás escribir otro o dejarlo en blanco durante esta sesión." : confirmation === "reject-diagnosis" ? "¿Deseas rechazar los diagnósticos sugeridos por IA y habilitar el ingreso manual? La elección solo permanecerá en esta sesión." : `¿Deseas utilizar «${chosenDiagnosis}» como diagnóstico provisional? Esta selección es temporal.`}</p>
           <div className="mt-5 flex justify-end gap-2"><Button variant="secondary" onClick={()=>setConfirmation(null)}>Cancelar</Button><Button disabled={reviewing} onClick={()=>void confirmAction()}>Confirmar</Button></div>
         </div>
       </div>}

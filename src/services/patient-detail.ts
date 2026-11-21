@@ -58,3 +58,26 @@ export function reviewPatientSummary(id: number) {
     },
   );
 }
+
+/** Descarga un examen protegido usando la misma sesión que las consultas clínicas. */
+export async function fetchPatientDocumentFile(patientId: number, documentId: number): Promise<Blob> {
+  const token = localStorage.getItem("arca-med-token");
+  if (!token) throw new Error("Inicia sesión como médico para abrir el examen.");
+
+  const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/pacientes/${patientId}/documentos/${documentId}/archivo`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new Error("No fue posible conectarse para abrir el examen.");
+  }
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+    if (response.status === 403) throw new Error("No tienes autorización para ver este examen.");
+    if (response.status === 404) throw new Error("El examen ya no está disponible.");
+    throw new Error("No se pudo abrir el examen. Inténtalo nuevamente.");
+  }
+  return response.blob();
+}

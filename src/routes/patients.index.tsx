@@ -200,6 +200,7 @@ function PatientsPage() {
         <>
         <Section
           title={isAdmin ? "Pacientes registrados" : "Directorio médico de pacientes"}
+          stackHeaderOnMobile
           action={
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               {/* Buscador de pacientes */}

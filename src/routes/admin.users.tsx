@@ -109,7 +109,7 @@ function AdminUsersPage() {
         </div>
       </form>
     </Section>}
-    <Section title="Directorio de usuarios" action={<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+    <Section title="Directorio de usuarios" stackHeaderOnMobile action={<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
       <label className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2"><Search className="size-4 shrink-0 text-muted-foreground"/><input type="search" aria-label="Buscar usuarios" placeholder="Buscar usuarios..." className="w-full min-w-0 bg-transparent text-sm outline-none sm:w-48" value={search} onChange={e=>setSearch(e.target.value)}/></label>
       <select aria-label="Filtrar por rol" value={roleFilter} onChange={e=>setRoleFilter(e.target.value as RoleFilter)} className="rounded-md border border-border bg-surface-raised px-3 py-2 text-sm"><option value="todos">Todos los roles</option>{Object.entries(labels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>
       <Button type="button" variant="outline" onClick={()=>void reload()} disabled={loading}><RefreshCw className="mr-2 size-4"/>Actualizar</Button>

@@ -23,12 +23,14 @@ export function Section({
   action,
   children,
   className,
+  stackHeaderOnMobile = false,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  stackHeaderOnMobile?: boolean;
 }) {
   return (
     <section
@@ -37,7 +39,12 @@ export function Section({
         className,
       )}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+      <div className={cn(
+        "grid items-start gap-3",
+        stackHeaderOnMobile
+          ? "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto]"
+          : "grid-cols-[minmax(0,1fr)_auto]",
+      )}>
         <div className="min-w-0">
           <h2 className="text-base font-semibold">{title}</h2>
           {description && (
