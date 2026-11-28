@@ -444,7 +444,11 @@ function PatientDetail() {
   const selectedSideGroup = sideGroups.find(group => group.key === activeSide) ?? sideGroups[0];
   const exerciseRegions = [...new Set(exercises.map((exercise) => exercise.articulacion))]
     .filter(Boolean).sort((a, b) => a.localeCompare(b, "es"));
-  const activeDiagnosis = diagnosisMode === "manual" ? diagnosisDraft : (acceptedDiagnosis || chosenDiagnosis);
+  const confirmedDiagnosis = summary?.estado_revision === "confirmado"
+    ? (summary.diagnostico_manual?.trim() || summary.diagnostico_seleccionado?.trim() || "")
+    : "";
+  const confirmedDiagnosisIsManual = Boolean(summary?.diagnostico_manual?.trim());
+  const activeDiagnosis = confirmedDiagnosis || (diagnosisMode === "manual" ? diagnosisDraft : chosenDiagnosis);
   // Coincidencias orientativas por articulación: no equivalen a prescripción automática.
   const diagnosisSuggestedRegions = exerciseRegions.filter((region) => {
     const normalizedRegion = normalizeText(region);
@@ -580,6 +584,22 @@ function PatientDetail() {
             <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La decisión sobre el resumen es independiente de la elección del diagnóstico clínico.</p>
           </div>
           <div className="rounded-md border border-border p-4">
+            {confirmedDiagnosis ? (
+              <div role="status" className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">Diagnóstico clínico registrado</h3>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">Confirmado</span>
+                </div>
+                <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
+                  <p className="font-medium">{confirmedDiagnosis}</p>
+                  <p className="mt-2 text-xs">{confirmedDiagnosisIsManual ? "Diagnóstico redactado por el médico." : "Diagnóstico seleccionado de las sugerencias de IA y confirmado por el médico."}</p>
+                </div>
+                {(summary?.confirmado_por_nombre || summary?.confirmado_en) && (
+                  <p className="text-xs text-muted-foreground">Registrado{summary.confirmado_por_nombre ? ` por ${summary.confirmado_por_nombre}` : ""}{summary.confirmado_en ? ` el ${formatMetricTime(summary.confirmado_en)}` : ""}.</p>
+                )}
+              </div>
+            ) : (
+              <>
             <h3 className="font-semibold">Diagnósticos diferenciales sugeridos</h3>
             <p className="mt-1 text-xs text-muted-foreground">Son hipótesis generadas por IA, no diagnósticos confirmados.</p>
             <div role="radiogroup" aria-label="Diagnósticos diferenciales sugeridos" className="mt-3 space-y-2">
@@ -603,7 +623,6 @@ function PatientDetail() {
                 </button>
               )) : <p className="text-sm text-muted-foreground">No hay diagnósticos diferenciales disponibles.</p>}
             </div>
-            {summary?.estado_revision === "confirmado" && <p role="status" className="mt-3 text-xs text-muted-foreground">Decisión médica registrada{summary.confirmado_por_nombre ? ` por ${summary.confirmado_por_nombre}` : ""}{summary.confirmado_en ? ` el ${formatMetricTime(summary.confirmado_en)}` : ""}.</p>}
             {diagnosisError && <p role="alert" className="mt-3 text-sm text-destructive">{diagnosisError}</p>}
             {isDoctor && diagnosisMode === "suggested" && (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -621,12 +640,9 @@ function PatientDetail() {
                   <Button variant="secondary" size="sm" onClick={() => { setDiagnosisMode("suggested"); setDiagnosisDraft(""); }}>Volver a sugerencias de IA</Button>
                 </div>
               </div>
-            ) : acceptedDiagnosis ? (
-              <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
-                <strong>Diagnóstico seleccionado:</strong> {acceptedDiagnosis}
-                <p className="mt-1 text-xs">{summary?.diagnostico_seleccionado === acceptedDiagnosis ? "Diagnóstico confirmado y guardado." : "Confirma la elección para guardarla."}</p>
-              </div>
             ) : null}
+              </>
+            )}
           </div>
         </div>
       </Section>
