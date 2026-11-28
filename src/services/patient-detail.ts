@@ -1,9 +1,7 @@
 import { apiRequest } from "@/services/api";
 
 export interface PatientMetric {
-  // El backend puede omitir lado en /resumen; la interfaz lo trata como opcional.
   lado?: string | null;
-  // Disponible si el backend amplía MetricaResumen con la fecha real de medición.
   medido_en?: string | null;
   articulacion: string;
   angulo_maximo: number;
@@ -11,6 +9,14 @@ export interface PatientMetric {
 }
 
 export interface PatientSummary {
+  prediagnostico_id: number;
+  cita_id: number | null;
+  estado_revision: "pendiente" | "revisado" | "confirmado";
+  revisado_por_medico: boolean;
+  diagnostico_seleccionado: string | null;
+  diagnostico_manual: string | null;
+  confirmado_por_nombre: string | null;
+  confirmado_en: string | null;
   resumen_generado: string;
   diagnosticos_diferenciales: unknown[];
   urgencia_sugerida: string;
@@ -45,15 +51,21 @@ export function getPatientDocuments(id: number) {
 export interface ReviewPatientSummaryResponse {
   id: number;
   revisado_por_medico: boolean;
+  estado_revision: "pendiente" | "revisado" | "confirmado";
+  diagnostico_seleccionado: string | null;
+  diagnostico_manual: string | null;
+  confirmado_por_nombre: string | null;
+  confirmado_en: string | null;
 }
 
-export function reviewPatientSummary(id: number) {
+export function reviewPatientSummary(id: number, decision: { diagnostico_seleccionado?: string; diagnostico_manual?: string } = {}) {
   return apiRequest<ReviewPatientSummaryResponse>(
     `/pacientes/${id}/resumen/revisar`,
     {
       method: "POST",
       body: JSON.stringify({
         revisado_por_medico: true,
+        ...decision,
       }),
     },
   );

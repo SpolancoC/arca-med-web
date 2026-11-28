@@ -14,6 +14,16 @@ export type Appointment = {
   duracion_minutos: number;
   motivo: string | null;
   estado: AppointmentStatus;
+  preconsulta?: {
+    disponible: boolean;
+    sintomas_registrados: boolean;
+    articulacion: string | null;
+    lado: string | null;
+    documentos: number;
+    evaluaciones: number;
+    enviada: boolean;
+    enviada_en: string | null;
+  };
 };
 export type CreateAppointment = {
   paciente_id: number;

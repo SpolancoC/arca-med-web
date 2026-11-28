@@ -1,7 +1,7 @@
 import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
-import { ArrowLeft, FileText, Info, Dumbbell, Check, X, Plus } from "lucide-react";
+import { ArrowLeft, FileText, Info, Dumbbell, Check, X, Plus, ClipboardList, Activity } from "lucide-react";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { PatientDocumentOpenButton } from "@/components/arca/patient-document-open-button";
@@ -19,6 +19,8 @@ import {
 
 import { getExercises, type Exercise } from "@/services/exercises";
 import { getMedicalPatients, type RegisteredPatient } from "@/services/patients";
+import { listAppointments, appointmentDate, type Appointment } from "@/services/appointments";
+import { getAssignedExercises, getDoctorExerciseExecutions, saveAssignedExercises, type ExerciseExecution } from "@/services/assigned-exercises";
 
 export const Route = createFileRoute("/patients/$patientId/")({
   head: () => ({
@@ -26,6 +28,8 @@ export const Route = createFileRoute("/patients/$patientId/")({
   }),
   component: PatientDetail,
 });
+
+type ClinicalTab = "anamnesis" | "evaluacion" | "ejercicios";
 
 type Priority = "High" | "Medium" | "Low";
 
@@ -92,6 +96,15 @@ function PatientDetail() {
   const [exercisesError, setExercisesError] = useState<string | null>(null);
   const [exerciseRegion, setExerciseRegion] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<number[]>([]);
+  const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [assignmentsSaving, setAssignmentsSaving] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentNotice, setAssignmentNotice] = useState<string | null>(null);
+  const [exerciseExecutions,setExerciseExecutions] = useState<ExerciseExecution[]>([]);
+  const [assignmentsDirty, setAssignmentsDirty] = useState(false);
+  const [activeTab, setActiveTab] = useState<ClinicalTab>("anamnesis");
   const [activeJoint, setActiveJoint] = useState("");
   const [activeSide, setActiveSide] = useState("");
   const [summaryDecision, setSummaryDecision] = useState<"accepted" | "rejected" | null>(null);
@@ -103,8 +116,9 @@ function PatientDetail() {
   const [confirmation, setConfirmation] = useState<"accept-summary" | "reject-summary" | "accept-diagnosis" | "reject-diagnosis" | null>(null);
 
   const [reviewing, setReviewing] = useState(false);
-  const [reviewSuccess, setReviewSuccess] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [summaryNotice, setSummaryNotice] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
 
   const isDoctor = localStorage.getItem("arca-med-role") === "medico";
   const fromDirectory = new URLSearchParams(window.location.search).get("desde") === "directorio";
@@ -113,17 +127,19 @@ function PatientDetail() {
     if (!isDoctor || !summary || reviewing) return;
 
     setReviewing(true);
-    setReviewError(null);
+    setSummaryError(null);
+    setSummaryNotice(null);
 
     try {
       const result = await reviewPatientSummary(id);
-      if (result.id !== id || result.revisado_por_medico !== true) {
+      if (result.revisado_por_medico !== true) {
         throw new Error("El servidor no confirmó la revisión del resumen. Comprueba el estado antes de intentarlo nuevamente.");
       }
-      setReviewSuccess(true);
       setSummaryDecision("accepted");
+      setSummaryNotice("Resumen revisado correctamente.");
+      setSummary(current => current ? { ...current, revisado_por_medico: result.revisado_por_medico, estado_revision: result.estado_revision } : current);
     } catch (err) {
-      setReviewError(
+      setSummaryError(
         err instanceof Error
           ? err.message
           : "No fue posible revisar el resumen.",
@@ -131,6 +147,42 @@ function PatientDetail() {
     } finally {
       setReviewing(false);
     }
+  }
+
+  async function saveDiagnosis(decision: { diagnostico_seleccionado?: string; diagnostico_manual?: string }) {
+    if (!isDoctor || !summary || reviewing) return;
+    setReviewing(true);
+    setDiagnosisError(null);
+    try {
+      const result = await reviewPatientSummary(id, decision);
+      if (result.estado_revision !== "confirmado") throw new Error("No se confirmó el diagnóstico.");
+      setSummary(current => current ? { ...current, ...result } : current);
+      setAcceptedDiagnosis(result.diagnostico_seleccionado || "");
+      setChosenDiagnosis(result.diagnostico_seleccionado || "");
+      setDiagnosisDraft(result.diagnostico_manual || "");
+      setDiagnosisMode(result.diagnostico_manual ? "manual" : "suggested");
+    } catch (err) {
+      setDiagnosisError(err instanceof Error ? err.message : "No se pudo guardar el diagnóstico.");
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  async function saveExerciseAssignment() {
+    const appointmentId = Number(selectedAppointmentId);
+    if (!isDoctor || !Number.isSafeInteger(appointmentId) || assignmentsSaving || assignmentsLoading) return;
+    if (!window.confirm("¿Guardar esta lista de ejercicios para la cita? Reemplazará la asignación anterior.")) return;
+    setAssignmentsSaving(true);
+    setAssignmentError(null);
+    setAssignmentNotice(null);
+    try {
+      const saved = await saveAssignedExercises(appointmentId, selectedExercises);
+      setSelectedExercises([...new Set(saved.map(item => item.id))]);
+      setAssignmentsDirty(false);
+      setAssignmentNotice("Ejercicios guardados para esta cita. El paciente podrá consultarlos desde su aplicación.");
+    } catch (err) {
+      setAssignmentError(err instanceof Error ? err.message : "No se pudo guardar la asignación.");
+    } finally { setAssignmentsSaving(false); }
   }
 
   useEffect(() => {
@@ -147,8 +199,9 @@ function PatientDetail() {
     setSummary(null);
     setPatient(null);
     setPatientError(null);
-    setReviewSuccess(false);
-    setReviewError(null);
+    setSummaryNotice(null);
+    setSummaryError(null);
+    setDiagnosisError(null);
     setSummaryDecision(null);
     setManualSummary("");
     setDiagnosisDraft("");
@@ -157,6 +210,7 @@ function PatientDetail() {
     setAcceptedDiagnosis("");
     setExerciseRegion("");
     setSelectedExercises([]);
+    setActiveTab("anamnesis");
     setActiveJoint("");
     setSummaryMissing(false);
     setSummaryLoadError(false);
@@ -198,6 +252,10 @@ function PatientDetail() {
 
       if (summaryResult.status === "fulfilled") {
         setSummary(summaryResult.value);
+        setAcceptedDiagnosis(summaryResult.value.diagnostico_seleccionado || "");
+        setChosenDiagnosis(summaryResult.value.diagnostico_seleccionado || "");
+        setDiagnosisDraft(summaryResult.value.diagnostico_manual || "");
+        setDiagnosisMode(summaryResult.value.diagnostico_manual ? "manual" : "suggested");
       } else {
         const status = (summaryResult.reason as { status?: number })?.status;
 
@@ -267,22 +325,49 @@ function PatientDetail() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setPatientAppointments([]);
+    setSelectedAppointmentId("");
+    if (!isDoctor || !Number.isSafeInteger(id) || id <= 0) return;
+    void listAppointments({ paciente_id: id }).then(items => {
+      if (active) setPatientAppointments(items.filter(item => item.estado !== "cancelada"));
+    }).catch(err => { if (active) setAssignmentError(err instanceof Error ? err.message : "No se pudieron cargar las citas."); });
+    return () => { active = false; };
+  }, [id, isDoctor]);
+
+  useEffect(() => {
+    let active = true;
+    setSelectedExercises([]);
+    setExerciseExecutions([]);
+    setAssignmentsDirty(false);
+    setAssignmentNotice(null);
+    setAssignmentError(null);
+    if (!selectedAppointmentId) return;
+    setAssignmentsLoading(true);
+    void Promise.all([getAssignedExercises(Number(selectedAppointmentId)), getDoctorExerciseExecutions(Number(selectedAppointmentId))])
+      .then(([items, executions]) => {
+        if (active) {setSelectedExercises([...new Set(items.map(item => item.id))]);setExerciseExecutions(executions);}
+      }).catch(err => { if (active) setAssignmentError(err instanceof Error ? err.message : "No se pudieron cargar los ejercicios y su historial."); })
+      .finally(() => { if (active) setAssignmentsLoading(false); });
+    return () => { active = false; };
+  }, [selectedAppointmentId]);
+
   async function confirmAction() {
     if (confirmation === "accept-summary") {
       setConfirmation(null);
       await handleReviewSummary();
     } else if (confirmation === "reject-summary") {
       setSummaryDecision("rejected");
+      setSummaryNotice(null);
+      setSummaryError(null);
       setConfirmation(null);
     } else if (confirmation === "accept-diagnosis") {
-      setAcceptedDiagnosis(chosenDiagnosis);
-      setDiagnosisMode("suggested");
-      setDiagnosisDraft("");
       setConfirmation(null);
+      await saveDiagnosis({ diagnostico_seleccionado: chosenDiagnosis });
     } else if (confirmation === "reject-diagnosis") {
       setDiagnosisMode("manual");
-      setAcceptedDiagnosis("");
-      setDiagnosisDraft("");
+      setDiagnosisDraft(summary?.diagnostico_manual || "");
       setConfirmation(null);
     }
   }
@@ -402,6 +487,36 @@ function PatientDetail() {
       </header>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
+      <nav aria-label="Secciones de la ficha clínica" role="tablist" className="grid grid-cols-1 gap-2 rounded-xl border border-border bg-card p-2 shadow-clinical sm:grid-cols-3 sm:gap-3 sm:p-3">
+        {([
+          { id: "anamnesis", label: "Anamnesis y diagnóstico", detail: "Síntomas, exámenes y triaje", Icon: ClipboardList },
+          { id: "evaluacion", label: "Evaluación y movilidad", detail: "Rango de movimiento", Icon: Activity },
+          { id: "ejercicios", label: "Ejercicios", detail: "Asignación y seguimiento", Icon: Dumbbell },
+        ] as const).map(({ id: tabId, label, detail, Icon }) => (
+          <button
+            key={tabId}
+            type="button"
+            id={`ficha-tab-${tabId}`}
+            role="tab"
+            aria-controls={`ficha-panel-${tabId}`}
+            aria-selected={activeTab === tabId}
+            onClick={() => setActiveTab(tabId)}
+            className={`flex min-w-0 items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-24 ${activeTab === tabId
+              ? "border-primary bg-primary text-primary-foreground shadow-sm"
+              : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted/50"
+            }`}
+          >
+            <Icon className="size-5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block break-words text-sm font-semibold leading-5">{label}</span>
+              <span className={`mt-1 block break-words text-xs ${activeTab === tabId ? "text-primary-foreground/85" : "text-muted-foreground"}`}>{detail}</span>
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "anamnesis" && (
+        <div id="ficha-panel-anamnesis" role="tabpanel" aria-labelledby="ficha-tab-anamnesis" className="min-w-0 space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Síntomas registrados" description="Último registro del paciente">
           <div className="mt-4 space-y-3 text-sm">
@@ -420,8 +535,8 @@ function PatientDetail() {
           <div className="mt-4 space-y-3 text-sm">
             {documentsError ? <p role="alert" className="text-destructive">{documentsError}</p> : recentDocuments.length ? (
               <>
-                {recentDocuments.map((doc) => (
-                  <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border p-3">
+                {recentDocuments.map((doc, index) => (
+                  <div key={`${doc.id}-${index}`} className="flex items-start gap-2 rounded-md border border-border p-3">
                     <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
                     <div className="min-w-0"><p className="break-all font-medium">{doc.nombre_archivo}</p><p className="text-xs text-muted-foreground">{formatRecordDate(doc.subido_en) ?? "Fecha no disponible"}</p><PatientDocumentOpenButton patientId={id} documentId={doc.id} filename={doc.nombre_archivo} /></div>
                   </div>
@@ -444,57 +559,82 @@ function PatientDetail() {
           <div className="rounded-md border border-border p-4">
             <h3 className="font-semibold">Resumen clínico generado por IA</h3>
             {summaryDecision === "rejected" ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-muted-foreground">Puedes redactar un resumen alternativo para esta revisión. El texto no se conservará al salir.</p>
-                <textarea className="w-full rounded-md border border-border bg-background p-3 text-sm" rows={5} placeholder="Redactar resumen clínico (opcional)" value={manualSummary} onChange={(e)=>setManualSummary(e.target.value)} />
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-muted-foreground">Has descartado el texto sugerido para esta revisión. Puedes redactar un resumen alternativo; por ahora se conserva solo mientras permanezcas en esta ficha.</p>
+                <label htmlFor="summary-manual" className="block text-sm font-medium">Resumen clínico alternativo (opcional)</label>
+                <textarea id="summary-manual" className="w-full rounded-md border border-border bg-background p-3 text-sm" rows={5} placeholder="Redactar resumen clínico" value={manualSummary} onChange={(e)=>setManualSummary(e.target.value)} />
+                {isDoctor && <Button variant="secondary" size="sm" onClick={() => { setSummaryDecision(null); setSummaryNotice(null); }}>Volver al resumen generado por IA</Button>}
+                <p className="text-xs text-muted-foreground">Este resumen alternativo no se guarda en el servidor. No afecta el diagnóstico que elijas más abajo.</p>
               </div>
             ) : (
               <p className="mt-3 whitespace-pre-wrap text-sm leading-7">{summary?.resumen_generado || "No hay resumen clínico disponible."}</p>
             )}
-            {reviewSuccess && <p role="status" className="mt-3 text-sm text-emerald-700">Revisión médica registrada correctamente.</p>}
-            {isDoctor && summary && !reviewSuccess && summaryDecision !== "rejected" && (
+            {summaryDecision === "accepted" && <p role="status" className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{summaryNotice || "Resumen revisado en esta sesión."}</p>}
+            {isDoctor && summary && summaryDecision === null && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button disabled={reviewing} onClick={()=>setConfirmation("accept-summary")}><Check className="mr-1 size-4"/>Aceptar resumen</Button>
                 <Button disabled={reviewing} variant="secondary" onClick={()=>setConfirmation("reject-summary")}><X className="mr-1 size-4"/>Rechazar resumen</Button>
               </div>
             )}
-            {reviewError && <p role="alert" className="mt-3 text-sm text-destructive">{reviewError}</p>}
-            <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La IA es una herramienta de apoyo; la revisión y decisión clínica corresponden al médico.</p>
+            {summaryError && <p role="alert" className="mt-3 text-sm text-destructive">{summaryError}</p>}
+            <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La decisión sobre el resumen es independiente de la elección del diagnóstico clínico.</p>
           </div>
           <div className="rounded-md border border-border p-4">
             <h3 className="font-semibold">Diagnósticos diferenciales sugeridos</h3>
             <p className="mt-1 text-xs text-muted-foreground">Son hipótesis generadas por IA, no diagnósticos confirmados.</p>
-            <div className="mt-3 space-y-2">
+            <div role="radiogroup" aria-label="Diagnósticos diferenciales sugeridos" className="mt-3 space-y-2">
               {diagnosisOptions.length ? diagnosisOptions.map((item,index) => (
-                <label key={`${item.name}-${index}`} className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-3 text-sm">
-                  <input type="radio" name="suggested-diagnosis" checked={chosenDiagnosis===item.name} onChange={()=>setChosenDiagnosis(item.name)} />
+                <button
+                  key={`${item.name}-${index}`}
+                  type="button"
+                  role="radio"
+                  aria-checked={diagnosisMode === "suggested" && chosenDiagnosis === item.name}
+                  aria-label={`${item.name}${item.estimate !== undefined ? `, estimación IA ${item.estimate}%` : ""}`}
+                  onClick={() => {
+                    setChosenDiagnosis(current => diagnosisMode === "suggested" && current === item.name ? "" : item.name);
+                    setDiagnosisMode("suggested");
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-md border border-border p-3 text-left text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground">
+                    {diagnosisMode === "suggested" && chosenDiagnosis === item.name && <span className="size-2 rounded-full bg-primary" />}
+                  </span>
                   <span>{item.name}{item.estimate !== undefined ? ` · estimación IA ${item.estimate}%` : ""}</span>
-                </label>
+                </button>
               )) : <p className="text-sm text-muted-foreground">No hay diagnósticos diferenciales disponibles.</p>}
             </div>
+            {summary?.estado_revision === "confirmado" && <p role="status" className="mt-3 text-xs text-muted-foreground">Decisión médica registrada{summary.confirmado_por_nombre ? ` por ${summary.confirmado_por_nombre}` : ""}{summary.confirmado_en ? ` el ${formatMetricTime(summary.confirmado_en)}` : ""}.</p>}
+            {diagnosisError && <p role="alert" className="mt-3 text-sm text-destructive">{diagnosisError}</p>}
             {isDoctor && diagnosisMode === "suggested" && (
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" disabled={!chosenDiagnosis} onClick={() => setConfirmation("accept-diagnosis")}>Aceptar diagnóstico seleccionado</Button>
-                <Button variant="secondary" size="sm" onClick={() => setConfirmation("reject-diagnosis")}>Rechazar sugerencias y escribir manualmente</Button>
+                <Button variant="secondary" size="sm" onClick={() => setConfirmation("reject-diagnosis")}>Ninguna sugerencia coincide: escribir diagnóstico propio</Button>
               </div>
             )}
             {diagnosisMode === "manual" ? (
               <div className="mt-4">
                 <label htmlFor="diagnosis-manual" className="block text-sm font-medium">Diagnóstico clínico manual</label>
+                <p className="mt-1 text-xs text-muted-foreground">Escribe tu propio diagnóstico si ninguna sugerencia corresponde. Esta elección se guarda de forma independiente del resumen clínico.</p>
                 <textarea id="diagnosis-manual" rows={2} value={diagnosisDraft} onChange={(e) => setDiagnosisDraft(e.target.value)} placeholder="Escribe el diagnóstico del profesional (opcional)" className="mt-2 w-full rounded-md border border-border bg-background p-3 text-sm" />
-                <p className="mt-2 text-xs text-muted-foreground">Este texto es temporal y no se conservará al salir.</p>
-                <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setDiagnosisMode("suggested"); setDiagnosisDraft(""); }}>Volver a sugerencias de IA</Button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" disabled={reviewing || !diagnosisDraft.trim()} onClick={() => void saveDiagnosis({ diagnostico_manual: diagnosisDraft.trim() })}>Guardar diagnóstico manual</Button>
+                  <Button variant="secondary" size="sm" onClick={() => { setDiagnosisMode("suggested"); setDiagnosisDraft(""); }}>Volver a sugerencias de IA</Button>
+                </div>
               </div>
             ) : acceptedDiagnosis ? (
               <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
                 <strong>Diagnóstico seleccionado:</strong> {acceptedDiagnosis}
-                <p className="mt-1 text-xs">Selección temporal; no se conservará al salir.</p>
+                <p className="mt-1 text-xs">{summary?.diagnostico_seleccionado === acceptedDiagnosis ? "Diagnóstico confirmado y guardado." : "Confirma la elección para guardarla."}</p>
               </div>
             ) : null}
           </div>
         </div>
       </Section>
+        </div>
+      )}
 
+      {activeTab === "evaluacion" && (
+        <div id="ficha-panel-evaluacion" role="tabpanel" aria-labelledby="ficha-tab-evaluacion" className="min-w-0 space-y-5">
       <Section title="Rango de movimiento" description="Evolución de las mediciones por articulación y extremidad">
         <div className="mt-4 space-y-4">
           {metricJointNames.length ? (
@@ -559,9 +699,22 @@ function PatientDetail() {
           ) : <p className="text-sm text-muted-foreground">No hay mediciones registradas.</p>}
         </div>
       </Section>
+        </div>
+      )}
 
+      {activeTab === "ejercicios" && (
+        <div id="ficha-panel-ejercicios" role="tabpanel" aria-labelledby="ficha-tab-ejercicios" className="min-w-0 space-y-5">
       <Section title="Ejercicios de rehabilitación" description="Selección clínica desde la biblioteca de ejercicios">
         <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Cita a la que se asignarán los ejercicios</label>
+            <select aria-label="Cita para asignar ejercicios" value={selectedAppointmentId}
+              onChange={e => { if (!assignmentsDirty || window.confirm("Hay cambios sin guardar. ¿Cambiar de cita y descartarlos?")) setSelectedAppointmentId(e.target.value); }}
+              className="w-full max-w-xl rounded-md border border-border bg-background px-3 py-2 text-sm">
+              <option value="">Seleccionar cita...</option>
+              {patientAppointments.map((c, index) => <option key={`${c.id}-${index}`} value={c.id}>#{c.id} · {appointmentDate(c.fecha_hora)} · {c.especialidad_nombre}</option>)}
+            </select>
+          </div>
           <div className="flex flex-wrap gap-2">
             <select value={exerciseRegion} onChange={(e)=>setExerciseRegion(e.target.value)} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
               <option value="">Seleccionar articulación...</option>
@@ -579,9 +732,9 @@ function PatientDetail() {
           {exercisesError && <p role="alert" className="text-sm text-destructive">{exercisesError}</p>}
           {!exerciseRegion && !exercisesLoading && !exercisesError && <p className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Selecciona una articulación para mostrar ejercicios disponibles.</p>}
           {Boolean(exerciseRegion) && !exercisesLoading && !exercisesError && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {visibleExercises.map((exercise)=>{
+            {visibleExercises.map((exercise, exerciseIndex)=>{
               const selected = selectedExercises.includes(exercise.id);
-              return <div key={exercise.id} className="flex flex-col rounded-md border border-border p-3 text-sm">
+              return <div key={`${exercise.id}-${exerciseIndex}`} className="flex flex-col rounded-md border border-border p-3 text-sm">
                 <p className="flex items-center gap-2 font-semibold"><Dumbbell className="size-4"/>{exercise.nombre_ejercicio}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{exercise.articulacion}</p>
                 {exercise.imagen_url && (
@@ -597,23 +750,41 @@ function PatientDetail() {
                   </div>
                 )}
                 <p className="mt-2 flex-1 whitespace-pre-wrap text-xs text-muted-foreground">{exercise.descripcion || "Sin descripción"}</p>
-                <Button className="mt-3" size="sm" variant={selected ? "secondary" : "primary"} onClick={()=>setSelectedExercises(prev=>selected ? prev.filter(x=>x!==exercise.id) : [...prev,exercise.id])}>{selected ? <><X className="mr-1 size-3"/>Quitar de la lista</> : <><Plus className="mr-1 size-3"/>Agregar a la lista</>}</Button>
+                <Button className="mt-3" size="sm" variant={selected ? "secondary" : "primary"} disabled={!selectedAppointmentId || assignmentsLoading || assignmentsSaving} onClick={()=>{setAssignmentsDirty(true);setAssignmentNotice(null);setSelectedExercises(prev=>selected ? prev.filter(x=>x!==exercise.id) : [...prev,exercise.id]);}}>{selected ? <><X className="mr-1 size-3"/>Quitar de la lista</> : <><Plus className="mr-1 size-3"/>Agregar a la lista</>}</Button>
               </div>;
             })}
             {!visibleExercises.length && <p className="text-sm text-muted-foreground">No hay ejercicios en esta categoría.</p>}
           </div>}
           <div className="rounded-md border border-border bg-muted/20 p-4">
             <h3 className="font-semibold">Lista de ejercicios seleccionados ({selectedExercises.length})</h3>
-            {selectedExercises.length ? <ul className="mt-3 space-y-2">{selectedExercises.map(exerciseId=>{ const ex=exercises.find(e=>e.id===exerciseId);return ex ? <li key={exerciseId} className="flex items-center justify-between gap-2 text-sm"><span>{ex.nombre_ejercicio} · {ex.articulacion}</span><button type="button" className="text-primary hover:underline" onClick={()=>setSelectedExercises(prev=>prev.filter(x=>x!==exerciseId))}>Quitar</button></li> : null; })}</ul> : <p className="mt-2 text-sm text-muted-foreground">Todavía no has agregado ejercicios.</p>}
-            <p className="mt-3 text-xs text-muted-foreground">Lista temporal para revisión; aún no constituye una asignación al paciente.</p>
+            {selectedExercises.length ? <ul className="mt-3 space-y-2">{selectedExercises.map((exerciseId, index)=>{ const ex=exercises.find(e=>e.id===exerciseId);return ex ? <li key={`${exerciseId}-${index}`} className="flex items-center justify-between gap-2 text-sm"><span>{ex.nombre_ejercicio} · {ex.articulacion}</span><button type="button" className="text-primary hover:underline" disabled={assignmentsSaving} onClick={()=>{setAssignmentsDirty(true);setSelectedExercises(prev=>prev.filter(x=>x!==exerciseId));}}>Quitar</button></li> : null; })}</ul> : <p className="mt-2 text-sm text-muted-foreground">Todavía no has agregado ejercicios.</p>}
+            {assignmentsLoading && <p className="mt-3 text-sm text-muted-foreground">Cargando ejercicios asignados...</p>}
+            {assignmentError && <p role="alert" className="mt-3 text-sm text-destructive">{assignmentError}</p>}
+            {assignmentNotice && <p role="status" className="mt-3 text-sm text-emerald-700">{assignmentNotice}</p>}
+            {selectedAppointmentId ? <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button disabled={assignmentsLoading || assignmentsSaving || !assignmentsDirty || selectedExercises.length > 20} onClick={() => void saveExerciseAssignment()}>{assignmentsSaving ? "Guardando..." : "Guardar ejercicios asignados"}</Button>
+              {assignmentsDirty && <span className="text-xs text-amber-700">Cambios sin guardar</span>}
+              {selectedExercises.length > 20 && <span className="text-xs text-destructive">Máximo 20 ejercicios por cita.</span>}
+            </div> : <p className="mt-3 text-xs text-muted-foreground">Selecciona una cita para guardar una prescripción de ejercicios.</p>}
           </div>
+          {selectedAppointmentId && <div className="rounded-md border border-border p-4">
+            <h3 className="font-semibold">Historial de ejercicios realizados en la cita</h3>
+            {!exerciseExecutions.length ? <p className="mt-2 text-sm text-muted-foreground">No hay ejecuciones registradas para esta cita.</p> :
+              <ul className="mt-3 space-y-2">{exerciseExecutions.map((entry, index) => <li key={`${entry.id}-${index}`} className="rounded-md border border-border p-3 text-sm">
+                <p className="font-medium">{entry.nombre_ejercicio || exercises.find(ex => ex.id === entry.ejercicio_id)?.nombre_ejercicio || `Ejercicio #${entry.ejercicio_id}`}</p>
+                <p className="text-xs text-muted-foreground">{new Date(entry.ejecutado_en).toLocaleString("es-CL")} · {entry.correcto ? "Correcto" : "Con dificultad"}</p>
+                {entry.comentario && <p className="mt-1 whitespace-pre-wrap">{entry.comentario}</p>}
+              </li>)}</ul>}
+          </div>}
         </div>
       </Section>
+        </div>
+      )}
 
       {confirmation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation">
         <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-xl">
           <h2 id="confirm-title" className="text-lg font-semibold">Confirmar decisión</h2>
-          <p className="mt-3 text-sm">{confirmation==="accept-summary" ? "¿Deseas aceptar este resumen y registrar su revisión médica?" : confirmation==="reject-summary" ? "¿Deseas rechazar el resumen de IA? Podrás escribir otro o dejarlo en blanco durante esta sesión." : confirmation === "reject-diagnosis" ? "¿Deseas rechazar los diagnósticos sugeridos por IA y habilitar el ingreso manual? La elección solo permanecerá en esta sesión." : `¿Deseas utilizar «${chosenDiagnosis}» como diagnóstico provisional? Esta selección es temporal.`}</p>
+          <p className="mt-3 text-sm">{confirmation==="accept-summary" ? "¿Deseas aceptar este resumen y registrar su revisión médica?" : confirmation==="reject-summary" ? "¿Deseas rechazar el resumen de IA? Podrás escribir otro o dejarlo en blanco durante esta sesión." : confirmation === "reject-diagnosis" ? "¿Deseas escribir un diagnóstico clínico propio en lugar de utilizar las sugerencias de IA?" : `¿Deseas confirmar y guardar «${chosenDiagnosis}» como diagnóstico clínico?`}</p>
           <div className="mt-5 flex justify-end gap-2"><Button variant="secondary" onClick={()=>setConfirmation(null)}>Cancelar</Button><Button disabled={reviewing} onClick={()=>void confirmAction()}>Confirmar</Button></div>
         </div>
       </div>}

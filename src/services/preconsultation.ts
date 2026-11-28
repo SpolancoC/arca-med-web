@@ -1,6 +1,6 @@
 import { apiRequest } from "./api";
 import type { Appointment } from "./appointments";
-export type PatientAppointment = Appointment & { preconsulta_enviada_en?: string | null };
+export type PatientAppointment = Appointment;
 export function getMyAppointments(): Promise<PatientAppointment[]> {return apiRequest<PatientAppointment[]>("/mis-citas?solo_proximas=false");}
 export function savePreconsultationSymptoms(citaId:number, data:{descripcion:string;articulacion:string;lado?:"izquierdo"|"derecho"}){
   return apiRequest<unknown>(`/mis-citas/${citaId}/sintomas`,{method:"POST",body:JSON.stringify(data)});

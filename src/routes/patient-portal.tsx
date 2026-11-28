@@ -3,17 +3,20 @@ import { createFileRoute } from "@/lib/router";
 import { PageHeader } from "@/components/arca/ui-kit";
 import { Section } from "@/components/arca/clinical";
 import { Button } from "@/components/ui/button";
-import type { Exercise } from "@/services/exercises";
+import { getMyAssignedExercises, getMyExerciseExecutions, recordAssignedExercise, type AssignedExercise, type ExerciseExecution } from "@/services/assigned-exercises";
 import { appointmentDate } from "@/services/appointments";
 import { getMyAppointments, savePreconsultationSymptoms, uploadPreconsultationDocument, savePreconsultationMetric, sendPreconsultation, type PatientAppointment } from "@/services/preconsultation";
-import { listPatientExercises, recordExercise, submitSymptom, submitMetric, uploadPatientDocument } from "@/services/patient-portal";
+import { submitSymptom, submitMetric, uploadPatientDocument } from "@/services/patient-portal";
 
 export const Route = createFileRoute("/mi-espacio")({ component: PatientPortal });
 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : "No se pudo completar la operación."; }
 
 function PatientPortal() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<AssignedExercise[]>([]);
+  const [exerciseAppointment,setExerciseAppointment]=useState("");
+  const [exerciseExecutions,setExerciseExecutions]=useState<ExerciseExecution[]>([]);
+  const [exerciseLoadError,setExerciseLoadError]=useState("");
   const [myAppointments,setMyAppointments]=useState<PatientAppointment[]>([]);
   const [appointmentError,setAppointmentError]=useState("");
   const [selectedAppointment,setSelectedAppointment]=useState("");
@@ -35,14 +38,28 @@ function PatientPortal() {
   const [document, setDocument] = useState<File | null>(null);
   const [metric, setMetric] = useState({ articulacion: "", lado: "derecho", angulo_minimo: "", angulo_maximo: "" });
 
-  useEffect(() => { let mounted = true;
-    listPatientExercises().then(items => {if(mounted) setExercises(items);}).catch(e=>{if(mounted) setError(errorMessage(e));}).finally(()=>{if(mounted) setLoading(false);});
-    return () => {mounted=false;};
-  }, []);
+  async function refreshExerciseHistory(appointmentId: number) {
+    const items = await getMyExerciseExecutions(appointmentId);
+    setExerciseExecutions(items);
+  }
+  useEffect(() => {
+    let mounted = true;
+    setExercises([]);
+    setExerciseExecutions([]);
+    setExerciseLoadError("");
+    if (!exerciseAppointment) { setLoading(false); return; }
+    setLoading(true);
+    const id = Number(exerciseAppointment);
+    void Promise.all([getMyAssignedExercises(id),getMyExerciseExecutions(id)])
+      .then(([assigned, executions]) => { if (mounted) {setExercises(assigned);setExerciseExecutions(executions);} })
+      .catch(err => { if (mounted) setExerciseLoadError(errorMessage(err)); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [exerciseAppointment]);
   async function loadMyAppointments(){try{setMyAppointments(await getMyAppointments());setAppointmentError("");}catch(e){setAppointmentError(errorMessage(e));}}
   useEffect(()=>{void loadMyAppointments();},[]);
   const selectedCita=myAppointments.find(c=>String(c.id)===selectedAppointment);
-  const preconsultationSent=!!selectedCita?.preconsulta_enviada_en || (selectedCita ? sentThisSession.includes(selectedCita.id) : false);
+  const preconsultationSent=!!selectedCita?.preconsulta?.enviada || (selectedCita ? sentThisSession.includes(selectedCita.id) : false);
   const joints=selectedCita?.articulaciones ?? [];
   async function savePreSymptoms(e:FormEvent){e.preventDefault();if(!selectedCita)return;
     const data={descripcion:preSymptoms.trim(),articulacion:preJoint,lado:(preJoint.toLowerCase().includes("cervical") || preJoint.toLowerCase().includes("lumbar"))?undefined:preSide as "derecho"|"izquierdo"};
@@ -90,7 +107,7 @@ function PatientPortal() {
         {selectedCita && <div className="space-y-4 rounded-md border border-border p-3 sm:p-4">
           <p className="text-sm">Especialidad: <strong>{selectedCita.especialidad_nombre}</strong></p>
           {preconsultationSent ? <p role="status" className="text-sm font-semibold">Esta preconsulta ya fue enviada.</p> : <>
-            <p className="text-xs text-muted-foreground">El backend no informa todavía el estado de preconsulta en la lista de citas. Si ya la enviaste, el servidor impedirá volver a enviarla.</p>
+            <p className="text-xs text-muted-foreground">Los registros de preconsulta se guardan para esta cita.</p>
             <form onSubmit={e=>void savePreSymptoms(e)} className="space-y-3">
               <h3 className="font-semibold">1. Síntomas</h3>
               <label className="block text-sm">Articulación
@@ -107,12 +124,39 @@ function PatientPortal() {
         </div>}
       </div>
     </Section>
-    <Section title="Biblioteca de ejercicios" description="Consulta ejercicios y registra cada ejecución realizada.">
-      <div className="mt-4 space-y-3">{loading ? <p className="text-sm text-muted-foreground">Cargando ejercicios…</p> : exercises.length===0 ? <p className="text-sm text-muted-foreground">No hay ejercicios disponibles.</p> : exercises.map(ex => <div key={ex.id} className="rounded-md border border-border p-4 space-y-2">
-        <h3 className="font-semibold">{ex.nombre_ejercicio}</h3><p className="text-sm text-muted-foreground">{ex.articulacion} · {ex.descripcion || "Sin descripción"}</p>
-        <label className="block text-sm">Comentario (opcional)<textarea className="mt-1 w-full rounded-md border border-border bg-background p-2" value={comments[ex.id]||""} onChange={e=>setComments(v=>({...v,[ex.id]:e.target.value}))}/></label>
-        <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void run(()=>recordExercise(ex.id,true,comments[ex.id]||""),"Ejecución registrada como correcta.")}>Registrar correcta</Button><Button variant="outline" disabled={busy} onClick={()=>void run(()=>recordExercise(ex.id,false,comments[ex.id]||""),"Ejecución registrada para revisión.")}>Registrar con dificultad</Button></div>
-      </div>)}</div>
+    <Section title="Mis ejercicios asignados" description="Ejercicios prescritos para cada cita por tu médico.">
+      <div className="mt-4 space-y-3">
+        <label className="block text-sm">Cita
+          <select value={exerciseAppointment} onChange={e=>{setExerciseAppointment(e.target.value);setError("");}} className="mt-1 w-full max-w-xl rounded-md border border-border bg-background p-2">
+            <option value="">Selecciona una cita...</option>
+            {myAppointments.filter(c=>c.estado!=="cancelada").map(c=><option key={c.id} value={c.id}>#{c.id} · {appointmentDate(c.fecha_hora)} · {c.especialidad_nombre}</option>)}
+          </select>
+        </label>
+        {exerciseLoadError && <p role="alert" className="text-sm text-destructive">{exerciseLoadError}</p>}
+        {!exerciseAppointment ? <p className="text-sm text-muted-foreground">Selecciona una cita para ver los ejercicios indicados por tu médico.</p>
+          : loading ? <p className="text-sm text-muted-foreground">Cargando ejercicios asignados…</p>
+          : exercises.length===0 ? <p className="text-sm text-muted-foreground">Todavía no hay ejercicios asignados para esta cita.</p>
+          : exercises.map(ex => <div key={ex.id} className="rounded-md border border-border p-4 space-y-2">
+            <h3 className="font-semibold">{ex.nombre_ejercicio}</h3>
+            <p className="text-sm text-muted-foreground">{ex.articulacion} · {ex.descripcion || "Sin descripción"}</p>
+            {ex.imagen_url && <div className="flex h-56 items-center justify-center rounded-md border border-border bg-muted/10 p-2"><img alt={`Ejercicio ${ex.nombre_ejercicio}`} className="h-full w-full object-contain" loading="lazy" src={ex.imagen_url.startsWith("http") ? ex.imagen_url : `${(import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "")}/${ex.imagen_url.replace(/^\//, "")}`} /></div>}
+            {ex.indicaciones && <p className="text-sm"><strong>Indicaciones del médico:</strong> {ex.indicaciones}</p>}
+            <label className="block text-sm">Comentario (opcional)<textarea className="mt-1 w-full rounded-md border border-border bg-background p-2" value={comments[ex.id]||""} onChange={e=>setComments(v=>({...v,[ex.id]:e.target.value}))}/></label>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={busy} onClick={()=>void run(async()=>{await recordAssignedExercise(Number(exerciseAppointment),ex.id,true,comments[ex.id]||"");await refreshExerciseHistory(Number(exerciseAppointment));},"Ejecución registrada como correcta.")}>Registrar correcta</Button>
+              <Button variant="outline" disabled={busy} onClick={()=>void run(async()=>{await recordAssignedExercise(Number(exerciseAppointment),ex.id,false,comments[ex.id]||"");await refreshExerciseHistory(Number(exerciseAppointment));},"Ejecución registrada para revisión.")}>Registrar con dificultad</Button>
+            </div>
+          </div>)}
+        {exerciseAppointment && !loading && <div className="mt-5 space-y-2 border-t border-border pt-4">
+          <h3 className="font-semibold">Historial de ejercicios realizados</h3>
+          {!exerciseExecutions.length ? <p className="text-sm text-muted-foreground">Todavía no hay ejecuciones registradas para esta cita.</p> :
+            exerciseExecutions.map(entry=><div key={entry.id} className="rounded-md border border-border p-3 text-sm">
+              <p className="font-medium">{entry.nombre_ejercicio || exercises.find(ex=>ex.id===entry.ejercicio_id)?.nombre_ejercicio || `Ejercicio #${entry.ejercicio_id}`}</p>
+              <p className="mt-1 text-muted-foreground">{new Date(entry.ejecutado_en).toLocaleString("es-CL")} · {entry.correcto ? "Realizado correctamente" : "Realizado con dificultad"}</p>
+              {entry.comentario && <p className="mt-1 whitespace-pre-wrap">{entry.comentario}</p>}
+            </div>)}
+        </div>}
+      </div>
     </Section>
     <Section title="Registrar síntomas" description="Envía una descripción de tus síntomas."><form onSubmit={e=>void saveSymptom(e)} className="mt-4 space-y-3"><textarea required value={symptom} onChange={e=>setSymptom(e.target.value)} className="w-full rounded-md border border-border bg-background p-3" placeholder="Describe tus molestias…"/><Button disabled={busy || !symptom.trim()} type="submit">Enviar síntomas</Button></form></Section>
     <Section title="Documentos" description="Adjunta un documento clínico permitido por el servidor."><form onSubmit={e=>void saveDocument(e)} className="mt-4 space-y-3"><input aria-label="Seleccionar documento" className="block w-full text-sm" type="file" onChange={e=>setDocument(e.target.files?.[0]||null)}/><Button disabled={busy || !document} type="submit">Subir documento</Button></form></Section>
@@ -123,6 +167,5 @@ function PatientPortal() {
       <label className="text-sm">Ángulo máximo<input type="number" required value={metric.angulo_maximo} onChange={e=>setMetric(v=>({...v,angulo_maximo:e.target.value}))} className="mt-1 w-full rounded-md border border-border bg-background p-2"/></label>
       <div className="sm:col-span-2"><Button type="submit" disabled={busy}>Guardar métrica</Button></div>
     </form></Section>
-    <Section title="Asignaciones e historial" description="Estas funciones todavía necesitan endpoints de consulta."><p className="mt-4 text-sm text-muted-foreground">Las ejecuciones se guardan en el servidor, pero todavía no es posible consultar aquí el historial ni las asignaciones del paciente. No se muestran registros de ejemplo.</p></Section>
   </div>;
 }
