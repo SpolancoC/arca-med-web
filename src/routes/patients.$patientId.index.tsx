@@ -1,7 +1,7 @@
 import { formatDisplayDate, useDateStyle } from "@/lib/display-preferences";
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@/lib/router";
-import { ArrowLeft, FileText, Info, Dumbbell, Check, X, Plus, ClipboardList, Activity } from "lucide-react";
+import { ArrowLeft, FileText, Dumbbell, X, Plus, ClipboardList, Activity } from "lucide-react";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { PatientDocumentOpenButton } from "@/components/arca/patient-document-open-button";
@@ -107,46 +107,16 @@ function PatientDetail() {
   const [activeTab, setActiveTab] = useState<ClinicalTab>("anamnesis");
   const [activeJoint, setActiveJoint] = useState("");
   const [activeSide, setActiveSide] = useState("");
-  const [summaryDecision, setSummaryDecision] = useState<"accepted" | "rejected" | null>(null);
-  const [manualSummary, setManualSummary] = useState("");
   const [diagnosisDraft, setDiagnosisDraft] = useState("");
   const [chosenDiagnosis, setChosenDiagnosis] = useState("");
   const [diagnosisMode, setDiagnosisMode] = useState<"suggested" | "manual">("suggested");
-  const [confirmation, setConfirmation] = useState<"accept-summary" | "reject-summary" | "accept-diagnosis" | "reject-diagnosis" | null>(null);
+  const [confirmation, setConfirmation] = useState<"accept-diagnosis" | "reject-diagnosis" | null>(null);
 
   const [reviewing, setReviewing] = useState(false);
-  const [summaryNotice, setSummaryNotice] = useState<string | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [diagnosisError, setDiagnosisError] = useState<string | null>(null);
 
   const isDoctor = localStorage.getItem("arca-med-role") === "medico";
   const fromDirectory = new URLSearchParams(window.location.search).get("desde") === "directorio";
-
-  async function handleReviewSummary() {
-    if (!isDoctor || !summary || reviewing) return;
-
-    setReviewing(true);
-    setSummaryError(null);
-    setSummaryNotice(null);
-
-    try {
-      const result = await reviewPatientSummary(id);
-      if (result.revisado_por_medico !== true) {
-        throw new Error("El servidor no confirmó la revisión del resumen. Comprueba el estado antes de intentarlo nuevamente.");
-      }
-      setSummaryDecision("accepted");
-      setSummaryNotice("Resumen revisado correctamente.");
-      setSummary(current => current ? { ...current, revisado_por_medico: result.revisado_por_medico, estado_revision: result.estado_revision } : current);
-    } catch (err) {
-      setSummaryError(
-        err instanceof Error
-          ? err.message
-          : "No fue posible revisar el resumen.",
-      );
-    } finally {
-      setReviewing(false);
-    }
-  }
 
   async function saveDiagnosis(decision: { diagnostico_seleccionado?: string; diagnostico_manual?: string }) {
     if (!isDoctor || !summary || reviewing) return;
@@ -198,11 +168,7 @@ function PatientDetail() {
     setSummary(null);
     setPatient(null);
     setPatientError(null);
-    setSummaryNotice(null);
-    setSummaryError(null);
     setDiagnosisError(null);
-    setSummaryDecision(null);
-    setManualSummary("");
     setDiagnosisDraft("");
     setChosenDiagnosis("");
     setDiagnosisMode("suggested");
@@ -353,15 +319,7 @@ function PatientDetail() {
   }, [selectedAppointmentId]);
 
   async function confirmAction() {
-    if (confirmation === "accept-summary") {
-      setConfirmation(null);
-      await handleReviewSummary();
-    } else if (confirmation === "reject-summary") {
-      setSummaryDecision("rejected");
-      setSummaryNotice(null);
-      setSummaryError(null);
-      setConfirmation(null);
-    } else if (confirmation === "accept-diagnosis") {
+    if (confirmation === "accept-diagnosis") {
       setConfirmation(null);
       await saveDiagnosis({ diagnostico_seleccionado: chosenDiagnosis });
     } else if (confirmation === "reject-diagnosis") {
@@ -561,26 +519,7 @@ function PatientDetail() {
           </div>
           <div className="rounded-md border border-border p-4">
             <h3 className="font-semibold">Resumen clínico generado por IA</h3>
-            {summaryDecision === "rejected" ? (
-              <div className="mt-3 space-y-3">
-                <p className="text-sm text-muted-foreground">Has descartado el texto sugerido para esta revisión. Puedes redactar un resumen alternativo; por ahora se conserva solo mientras permanezcas en esta ficha.</p>
-                <label htmlFor="summary-manual" className="block text-sm font-medium">Resumen clínico alternativo (opcional)</label>
-                <textarea id="summary-manual" className="w-full rounded-md border border-border bg-background p-3 text-sm" rows={5} placeholder="Redactar resumen clínico" value={manualSummary} onChange={(e)=>setManualSummary(e.target.value)} />
-                {isDoctor && <Button variant="secondary" size="sm" onClick={() => { setSummaryDecision(null); setSummaryNotice(null); }}>Volver al resumen generado por IA</Button>}
-                <p className="text-xs text-muted-foreground">Este resumen alternativo no se guarda en el servidor. No afecta el diagnóstico que elijas más abajo.</p>
-              </div>
-            ) : (
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-7">{summary?.resumen_generado || "No hay resumen clínico disponible."}</p>
-            )}
-            {summaryDecision === "accepted" && <p role="status" className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{summaryNotice || "Resumen revisado en esta sesión."}</p>}
-            {isDoctor && summary && summaryDecision === null && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button disabled={reviewing} onClick={()=>setConfirmation("accept-summary")}><Check className="mr-1 size-4"/>Aceptar resumen</Button>
-                <Button disabled={reviewing} variant="secondary" onClick={()=>setConfirmation("reject-summary")}><X className="mr-1 size-4"/>Rechazar resumen</Button>
-              </div>
-            )}
-            {summaryError && <p role="alert" className="mt-3 text-sm text-destructive">{summaryError}</p>}
-            <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground"><Info className="size-4 shrink-0"/>La decisión sobre el resumen es independiente de la elección del diagnóstico clínico.</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-7">{summary?.resumen_generado || "No hay resumen clínico disponible."}</p>
           </div>
           <div className="rounded-md border border-border p-4">
             {confirmedDiagnosis ? (
@@ -799,7 +738,7 @@ function PatientDetail() {
       {confirmation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation">
         <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-xl">
           <h2 id="confirm-title" className="text-lg font-semibold">Confirmar decisión</h2>
-          <p className="mt-3 text-sm">{confirmation==="accept-summary" ? "¿Deseas aceptar este resumen y registrar su revisión médica?" : confirmation==="reject-summary" ? "¿Deseas rechazar el resumen de IA? Podrás escribir otro o dejarlo en blanco durante esta sesión." : confirmation === "reject-diagnosis" ? "¿Deseas escribir un diagnóstico clínico propio en lugar de utilizar las sugerencias de IA?" : `¿Deseas confirmar y guardar «${chosenDiagnosis}» como diagnóstico clínico?`}</p>
+          <p className="mt-3 text-sm">{confirmation === "reject-diagnosis" ? "¿Deseas escribir un diagnóstico clínico propio en lugar de utilizar las sugerencias de IA?" : `¿Deseas confirmar y guardar «${chosenDiagnosis}» como diagnóstico clínico?`}</p>
           <div className="mt-5 flex justify-end gap-2"><Button variant="secondary" onClick={()=>setConfirmation(null)}>Cancelar</Button><Button disabled={reviewing} onClick={()=>void confirmAction()}>Confirmar</Button></div>
         </div>
       </div>}
