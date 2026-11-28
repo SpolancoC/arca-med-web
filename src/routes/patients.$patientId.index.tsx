@@ -112,7 +112,6 @@ function PatientDetail() {
   const [diagnosisDraft, setDiagnosisDraft] = useState("");
   const [chosenDiagnosis, setChosenDiagnosis] = useState("");
   const [diagnosisMode, setDiagnosisMode] = useState<"suggested" | "manual">("suggested");
-  const [acceptedDiagnosis, setAcceptedDiagnosis] = useState("");
   const [confirmation, setConfirmation] = useState<"accept-summary" | "reject-summary" | "accept-diagnosis" | "reject-diagnosis" | null>(null);
 
   const [reviewing, setReviewing] = useState(false);
@@ -157,7 +156,7 @@ function PatientDetail() {
       const result = await reviewPatientSummary(id, decision);
       if (result.estado_revision !== "confirmado") throw new Error("No se confirmó el diagnóstico.");
       setSummary(current => current ? { ...current, ...result } : current);
-      setAcceptedDiagnosis(result.diagnostico_seleccionado || "");
+
       setChosenDiagnosis(result.diagnostico_seleccionado || "");
       setDiagnosisDraft(result.diagnostico_manual || "");
       setDiagnosisMode(result.diagnostico_manual ? "manual" : "suggested");
@@ -207,7 +206,7 @@ function PatientDetail() {
     setDiagnosisDraft("");
     setChosenDiagnosis("");
     setDiagnosisMode("suggested");
-    setAcceptedDiagnosis("");
+
     setExerciseRegion("");
     setSelectedExercises([]);
     setActiveTab("anamnesis");
@@ -252,7 +251,7 @@ function PatientDetail() {
 
       if (summaryResult.status === "fulfilled") {
         setSummary(summaryResult.value);
-        setAcceptedDiagnosis(summaryResult.value.diagnostico_seleccionado || "");
+
         setChosenDiagnosis(summaryResult.value.diagnostico_seleccionado || "");
         setDiagnosisDraft(summaryResult.value.diagnostico_manual || "");
         setDiagnosisMode(summaryResult.value.diagnostico_manual ? "manual" : "suggested");
